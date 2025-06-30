@@ -29,7 +29,7 @@ export default function JoinWaitlist() {
             setLoading(false);
             if (json.success) {
                 setSuccess(true);
-                setInterval(() => {
+                setTimeout(() => {
                     setSuccess(false);
                 }, 2000);
             } else if (json.error) {
@@ -45,7 +45,7 @@ export default function JoinWaitlist() {
                 <p className="mb-3 text-gray-500 dark:text-gray-400">Early users shape the future. Join us.</p>
             </div>
             <form action="#" method="post" onSubmit={handleSumbit}>
-                {error && <p>{error}</p>}
+                {error && <p className="text-red-500">{error}</p>}
                 <Field className="flex gap-3 w-full">
                     <Input placeholder="Email" required type="email" value={email} onChange={e => setEmail(e.target.value)} className="rounded-lg border-none flex-2/3 bg-gray-500/20 dark:bg-white/5 px-3 py-1.5 text-sm/6 focus:not-data-focus:outline-none data-focus:outline-2 data-focus:-outline-offset-2 data-focus:outline-white/25"/>
                     <Button type="submit" disabled={loading} className="bg-primary flex-1/3 outline-2 outline-transparent px-3 py-2 rounded-lg transition-all ease-in cursor-pointer hover:outline-primary/50 active:opacity-70">{ success ? <CheckCircleIcon className="h-6 inline"/> : loading ? 'Loading...' : 'Join' }</Button>

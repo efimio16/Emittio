@@ -11,17 +11,21 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Invalid email" }, { status: 400 });
     }
 
-    const client = new MongoClient(MONGODB_URI);
-    await client.connect();
-    const db = client.db("emittio");
-    const subscribers = db.collection("subscribers");
+    try {
+        const client = new MongoClient(MONGODB_URI);
+        await client.connect();
+        const db = client.db("emittio");
+        const subscribers = db.collection("subscribers");
 
-    await subscribers.updateOne(
-        { email },
-        { $set: { email, createdAt: new Date() } },
-        { upsert: true }
-    );
+        await subscribers.updateOne(
+            { email },
+            { $set: { email, createdAt: new Date() } },
+            { upsert: true }
+        );
 
-    client.close();
-    return NextResponse.json({ success: true });
+        client.close();
+        return NextResponse.json({ success: true });
+    } catch {
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    }
 }
