@@ -48,7 +48,7 @@ export default function JoinWaitlist() {
                 {error && <p className="text-red-500">{error}</p>}
                 <Field className="flex gap-3 w-full">
                     <Input placeholder="Email" required type="email" value={email} onChange={e => setEmail(e.target.value)} className="rounded-lg border-none flex-2/3 bg-gray-500/20 dark:bg-white/5 px-3 py-1.5 text-sm/6 focus:not-data-focus:outline-none data-focus:outline-2 data-focus:-outline-offset-2 data-focus:outline-white/25"/>
-                    <Button type="submit" disabled={loading} className="bg-primary flex-1/3 outline-2 outline-transparent px-3 py-2 rounded-lg transition-all ease-in cursor-pointer hover:outline-primary/50 active:opacity-70">{ success ? <CheckCircleIcon className="h-6 inline"/> : loading ? 'Loading...' : 'Join' }</Button>
+                    <Button type="submit" disabled={loading} className="bg-primary disabled:opacity-50 flex-1/3 outline-2 outline-transparent px-3 py-2 rounded-lg transition-all ease-in cursor-pointer disabled:cursor-not-allowed not-disabled:hover:outline-primary/50 active:opacity-70">{ success ? <CheckCircleIcon className="h-6 inline"/> : loading ? 'Loading...' : 'Join' }</Button>
                 </Field>
             </form>
             <div className="relative flex items-center justify-center m-4">
