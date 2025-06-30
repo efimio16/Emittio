@@ -1,8 +1,8 @@
-import { Button, Field, Input, Label } from "@headlessui/react";
+import { Button, Field, Input } from "@headlessui/react";
 import Image from "next/image";
 import Link from "next/link";
 
-export default function() {
+export default function JoinWaitlist() {
     return (
         <div id="join" className="bg-gray-200 dark:bg-gray-800 w-md pt-3 border-2 border-primary overflow-hidden flex flex-col justify-around rounded-2xl p-5">
             <div>

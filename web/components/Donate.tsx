@@ -34,7 +34,7 @@ const qr_codes = [
     },
 ]
 
-export default function() {
+export default function Donate() {
     return (
         <div id="donate" className="bg-gray-200 dark:bg-gray-800 border-primary border-2 pt-3 w-md p-5 overflow-hidden rounded-2xl">
             <h2 className="text-3xl pt-3 mb-2">Power Emittio.<br/>Preserve privacy.</h2>

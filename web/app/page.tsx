@@ -6,7 +6,7 @@ import Header from "@/components/sections/Header";
 import How from "@/components/sections/How";
 import Why from "@/components/sections/Why";
 
-export default function() {
+export default function Main() {
     return (
         <>
             <main className="px-4">

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 
-export default function() {
+export default function Footer() {
     return (
         <footer className="p-5 flex justify-center gap-10">
              <Link target="_blank" className="flex items-center flex-col" href="https://t.me/EmittioMail">

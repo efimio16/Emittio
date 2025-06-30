@@ -1,7 +1,7 @@
 'use client';
 import LogoLarge from "../images/LogoLarge"
 
-export default function() {
+export default function Header() {
     return (
         <section className="flex items-center justify-center h-screen">
             <div className="w-fit flex items-center flex-col gap-5 text-center">

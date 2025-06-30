@@ -14,7 +14,7 @@ import {
 } from "@heroicons/react/20/solid";
 import Image from "next/image";
 
-export default function() {
+export default function Difference() {
     return (
         <section className="flex flex-col py-4 items-center mb-10">
             <h2 className="text-5xl text-center w-full mb-5">Emittio vs others</h2>

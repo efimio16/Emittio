@@ -1,6 +1,4 @@
-import { useState } from "react";
-
-export default function({ step = 5 }: { step?: number }) {
+export default function Explanation({ step = 5 }: { step?: number }) {
     const hiddenIdentity = step < 2;
     const nodeWorking = step < 4;
     const mailCoords = [

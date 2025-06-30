@@ -12,7 +12,7 @@ const captions = [
     "the recipient can still retrieve the mail from other nodes in the quorum."
 ];
 
-export default function() {
+export default function How() {
     const [step, setStep] = useState(0);
     
     return (

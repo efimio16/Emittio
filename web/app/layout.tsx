@@ -18,7 +18,10 @@ export const metadata: Metadata = {
   ],
 };
 
-const source_Serif_4 = Source_Serif_4();
+const source_Serif_4 = Source_Serif_4({
+  subsets: ['latin'],
+  preload: true
+});
 
 export default function RootLayout({
   children,

@@ -2,7 +2,7 @@
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
 import { useState } from "react";
 
-export default function() {
+export default function FAQ() {
     const [open, setOpen] = useState<number>();
 
     return (
@@ -17,7 +17,7 @@ export default function() {
                         <ChevronDownIcon className="size-5 flex-none group-data-open:rotate-180 transition-transform duration-300" />
                     </p>
                     <p className="group-[&:not([data-open])]:hidden text-gray-600 mt-2 dark:text-gray-400">
-                        Emittio is decentralized, encrypted by default, and doesn't rely on central servers. It uses distributed storage (IPFS), anonymous routing, and requires no personal data or traditional accounts.
+                        Emittio is decentralized, encrypted by default, and doesn&apos;t rely on central servers. It uses distributed storage (IPFS), anonymous routing, and requires no personal data or traditional accounts.
                     </p>
                 </div>
                 <div data-open={open === 1 || null} className="group mb-3 outline-1 data-open:outline-primary data-open:outline-2 transition-color duration-150 outline-gray-300 rounded-3xl p-5 dark:outline-gray-700 bg-gray-100 dark:bg-gray-900" onClick={() => setOpen(open => open === 1 ? undefined : 1)}>
@@ -28,7 +28,7 @@ export default function() {
                         <ChevronDownIcon className="size-5 flex-none group-data-open:rotate-180 transition-transform duration-300" />
                     </p>
                     <p className="group-[&:not([data-open])]:hidden text-gray-600 mt-2 dark:text-gray-400">
-                        Yes. Emittio hides your IP, doesn't require personal info, and uses random routes to deliver mail.
+                        Yes. Emittio hides your IP, doesn&apos;t require personal info, and uses random routes to deliver mail.
                     </p>
                 </div>
                 <div data-open={open === 2 || null} className="group mb-3 outline-1 data-open:outline-primary data-open:outline-2 transition-color duration-150 outline-gray-300 rounded-3xl p-5 dark:outline-gray-700 bg-gray-100 dark:bg-gray-900" onClick={() => setOpen(open => open === 2 ? undefined : 2)}>
@@ -94,7 +94,7 @@ export default function() {
                         <ChevronDownIcon className="size-5 flex-none group-data-open:rotate-180 transition-transform duration-300" />
                     </p>
                     <p className="group-[&:not([data-open])]:hidden text-gray-600 mt-2 dark:text-gray-400">
-                        Very difficult. Since it uses IPFS and independent nodes, there's no central point to target — and messages are cached across multiple regions.
+                        Very difficult. Since it uses IPFS and independent nodes, there&apos;s no central point to target — and messages are cached across multiple regions.
                     </p>
                 </div>
                 <div data-open={open === 8 || null} className="group mb-3 outline-1 data-open:outline-primary data-open:outline-2 transition-color duration-150 outline-gray-300 rounded-3xl p-5 dark:outline-gray-700 bg-gray-100 dark:bg-gray-900" onClick={() => setOpen(open => open === 8 ? undefined : 8)}>
@@ -116,7 +116,7 @@ export default function() {
                         <ChevronDownIcon className="size-5 flex-none group-data-open:rotate-180 transition-transform duration-300" />
                     </p>
                     <p className="group-[&:not([data-open])]:hidden text-gray-600 mt-2 dark:text-gray-400">
-                        None. We don't store IPs, names, emails, or any personal data.
+                        None. We don&apos;t store IPs, names, emails, or any personal data.
                     </p>
                 </div>
                 <div data-open={open === 10 || null} className="group mb-3 outline-1 data-open:outline-primary data-open:outline-2 transition-color duration-150 outline-gray-300 rounded-3xl p-5 dark:outline-gray-700 bg-gray-100 dark:bg-gray-900" onClick={() => setOpen(open => open === 10 ? undefined : 10)}>
