@@ -2,7 +2,7 @@
 
 *Anonymous, decentralized email. Powered by IPFS, quorums, and end-to-end encryption.*
 
-🌐 [Website](https://emittio-udk2.vercel.app/) | 📣 [Telegram](https://t.me/EmittioMail)
+🌐 [Website](https://emittio.vercel.app/) | 📣 [Telegram](https://t.me/EmittioMail)
 
 ## ✨ Why Emittio?
 
