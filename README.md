@@ -2,6 +2,8 @@
 
 *Anonymous, decentralized email. Powered by IPFS, quorums, and end-to-end encryption.*
 
+🌐 [Website](https://emittio-udk2.vercel.app/) | 📣 [Telegram](https://t.me/EmittioMail)
+
 ## ✨ Why Emittio?
 
 > A next-gen email protocol designed for privacy, resilience, and full user control.
