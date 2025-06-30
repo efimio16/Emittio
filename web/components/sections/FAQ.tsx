@@ -6,7 +6,7 @@ export default function FAQ() {
     const [open, setOpen] = useState<number>();
 
     return (
-        <section className="flex flex-col py-4 items-center mb-10">
+        <section id="faq" className="flex flex-col py-4 items-center mb-10">
             <h2 className="text-5xl text-center w-full mb-5">FAQ</h2>
             <div className="max-w-300 w-4/5">
                 <div data-open={open === 0 || null} className="group mb-3 outline-1 data-open:outline-primary data-open:outline-2 transition-color duration-150 outline-gray-300 rounded-3xl p-5 dark:outline-gray-700 bg-gray-100 dark:bg-gray-900"  onClick={() => setOpen(open => open === 0 ? undefined : 0)}>

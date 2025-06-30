@@ -2,7 +2,7 @@ import { BoltIcon, GlobeAltIcon, LockClosedIcon, FingerPrintIcon, BookOpenIcon }
 
 export default function Why() {
     return (
-        <section className="flex flex-col py-4 mb-10">
+        <section id="why" className="flex flex-col py-4 mb-10">
             <h2 className="text-5xl text-center w-full mb-5">Why Emittio?</h2>
             <div className="flex flex-row flex-wrap justify-center">
                 <div className="w-90 min-w-1/3 flex items-center flex-col text-center m-4 p-4 border-2 border-primary rounded-xl">

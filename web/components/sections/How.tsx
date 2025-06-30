@@ -16,7 +16,7 @@ export default function How() {
     const [step, setStep] = useState(0);
     
     return (
-        <section className="flex flex-col py-4 mb-10 items-center">
+        <section id="how" className="flex flex-col py-4 mb-10 items-center">
             <h2 className="text-5xl text-center w-full mb-7">How does Emittio work?</h2>
             <div className="backdrop-blur-2xl bg-gray-500/10 dark:bg-gray-50/10 max-w-300 w-full rounded-2xl h-2/3 min-h-80 flex flex-col p-4 items-center">
                 <p className="mb-2 h-30 w-3/4 min-w-100 flex items-center">

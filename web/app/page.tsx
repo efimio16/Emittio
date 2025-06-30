@@ -1,5 +1,5 @@
 import CTA from "@/components/sections/CTA";
-import Difference from "@/components/sections/Difference";
+import Comparison from "@/components/sections/Comparison";
 import FAQ from "@/components/sections/FAQ";
 import Footer from "@/components/sections/Footer";
 import Header from "@/components/sections/Header";
@@ -13,7 +13,7 @@ export default function Main() {
                 <Header/>
                 <Why/>
                 <How/>
-                <Difference/>
+                <Comparison/>
                 <CTA/>
                 <FAQ/>
             </main>
