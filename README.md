@@ -1,50 +1,47 @@
 # <img src="assets/logo.png" alt="Emittio logo" style="height: 1em"/> Emittio
 
-*Anonymous, decentralized email. Powered by IPFS, quorums, and end-to-end encryption.*
+*Anonymous, decentralized email. Powered by IPFS and end-to-end encryption.*
 
 🌐 [Website](https://emittio.vercel.app/) | 📣 [Telegram](https://t.me/EmittioMail)
 
-## ✨ Why Emittio?
+## Why Emittio?
 
 > A next-gen email protocol designed for privacy, resilience, and full user control.
 
-We’re building a mail system that is:
+We're building a mail system that is:
 
 - 🕸️ **Decentralized** — no central servers, no single point of failure  
 - 🔐 **End-to-end encrypted** — only sender and recipient can read the content  
-- 👤 **Anonymous** — no metadata linking IPs, addresses, or messages  
+- 👤 **Anonymous** — no IDs or accounts
 - ⚡️ **Efficient** — fast delivery, minimal cost
 
-## 🧠 Architecture Overview
+## Architecture Overview
 
-| Component        | Role                                                       |
-|------------------|------------------------------------------------------------|
-| **IPFS**         | Stores encrypted message blobs                             |
-| **Smart Contracts** | Handles decentralized user registration and key anchors |
-| **Nodes**        | Relay encrypted content across the network                 |
-| **Quorums**      | Act as replicators and pin important data for reliability  |
+| Component | Role |
+|-|-|
+| **Inbox** | Unique address per contact you give to hide your real identity |
+| **IPFS** | Allows to find inboxes and encrypted mails in network |
+| **Nodes** | Save encrypted content |
 
 > 📦 Messages are encrypted and chunked, then routed via multiple nodes using quorum consensus and replication strategies.
 
-## 🛣️ Roadmap
+## Roadmap
 
-- [ ] **Step 1**: Anonymous delivery via 2-node relay (Tor-like structure)  
-- [ ] **Step 2**: Quorum layer with rotation, replication, and caching  
-- [ ] **Step 3**: Smart contract-based identity/key registration  
-- [ ] **Step 4**: Fully functional, privacy-focused web client  
+1. [ ] Cryptography system prototype in Rust
+2. [ ] IPFS node for storing mails with replication
+3. [ ] Svelte web client
 
-## 🌍 Status
+## Status
 
 > MVP design in progress. Community contributors welcome!
 
-## 🧩 Tech Stack (Planned)
+## Tech Stack (Planned)
 
-- IPFS
-- Rust (solana smart contracts)
-- Golang (nodes)
-- NextJS (web client)
+- IPFS on QUIC protocol
+- Rust (nodes)
+- Svelte (web client)
 
-## ❤️ Support
+## Support
 
 - BTC: `bc1qq90dh06ah92sg6unfnsn0edx9l9a9msfpagh3f`
 - ETH: `0xB9be3CbB7Dc9f9C104640899AeF4A1b4147f9e21`
