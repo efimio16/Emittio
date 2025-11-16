@@ -16,6 +16,6 @@ impl Inbox {
     }
 
     pub fn new_envelope(&mut self, plaintext: &[u8]) -> Result<Envelope, &'static str> {
-        Envelope::encrypt_and_sign(plaintext, self.message_counter, self.sender.clone(), self.recipient.clone())
+        Envelope::encrypt(plaintext, self.message_counter, self.sender.clone(), self.recipient.clone())
     }
 }

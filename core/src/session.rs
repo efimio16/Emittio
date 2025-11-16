@@ -1,8 +1,6 @@
 use rand::{RngCore, rngs::OsRng};
-use hkdf::Hkdf;
-use sha2::Sha256;
 
-use crate::{bundles::{PrivateBundle, PublicBundle}, inbox::Inbox};
+use crate::{bundles::{PrivateBundle, PublicBundle}, inbox::Inbox, utils};
 
 pub struct Session {
     seed: [u8; 32],
@@ -41,26 +39,11 @@ impl Session {
         )
     }
     fn inbox_keys(&self, inbox_counter: u32) -> PrivateBundle {
-        let hk = Hkdf::<Sha256>::new(None, &self.seed);
+        let x_sk = utils::derive(&self.seed, &utils::info(b"x25519-key-", inbox_counter));
+        let ed_sk = utils::derive(&self.seed, &utils::info(b"ed25519-key-", inbox_counter));
+        let kb_seed = utils::derive(&self.seed, &utils::info(b"kb-seed-", inbox_counter));
+        let dl_seed = utils::derive(&self.seed, &utils::info(b"dl-seed-", inbox_counter));
         
-        let (x_info, ed_info) = self.key_info(inbox_counter);
-        let mut new_x_sk = [0u8; 32];
-        hk.expand(&x_info, &mut new_x_sk).expect("HKDF expansion failed");
-
-        let mut new_ed_sk = [0u8; 32];
-        hk.expand(&ed_info, &mut new_ed_sk).expect("HKDF expansion failed");
-        
-        PrivateBundle::from_bytes(&new_x_sk, &new_ed_sk)
-    }
-    fn key_info(&self, count: u32) -> (Vec<u8>, Vec<u8>) {
-        let mut x_info = Vec::new();
-        x_info.extend_from_slice(b"x25519-key-");
-        x_info.extend_from_slice(&count.to_le_bytes());
-
-        let mut ed_info = Vec::new();
-        ed_info.extend_from_slice(b"ed25519-key-");
-        ed_info.extend_from_slice(&count.to_le_bytes());
-
-        (x_info, ed_info)
+        PrivateBundle::new(&x25519_dalek::StaticSecret::from(x_sk), &ed25519_dalek::SigningKey::from_bytes(&ed_sk), kb_seed, dl_seed)
     }
 }
