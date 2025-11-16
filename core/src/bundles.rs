@@ -33,6 +33,23 @@ impl PrivateBundle {
             dl_pk: dl.public,
         }
     }
+    pub fn random() -> Self {
+        let x_sk = x25519_dalek::StaticSecret::random_from_rng(&mut OsRng);
+        let ed_sk = ed25519_dalek::SigningKey::generate(&mut OsRng);
+        let kb = pqc_kyber::keypair(&mut OsRng).expect("Failed to generate kyber keypair");
+        let dl = pqc_dilithium::Keypair::generate(&mut OsRng).expect("Failed to generate dilithium keypair");
+        
+        Self {
+            x_sk: x_sk.clone(),
+            x_pk: x25519_dalek::PublicKey::from(&x_sk),
+            ed_sk: ed_sk.clone(),
+            ed_pk: ed25519_dalek::VerifyingKey::from(&ed_sk),
+            kb_sk: kb.secret,
+            kb_pk: kb.public,
+            dl_sk: dl.secret,
+            dl_pk: dl.public,
+        }
+    }
     pub fn public(&self) -> PublicBundle {
         PublicBundle::new(&self.x_pk, &self.ed_pk, &self.kb_pk, &self.dl_pk)
     }
@@ -80,6 +97,8 @@ impl PublicBundle {
         let mut buf = Vec::new();
         buf.extend_from_slice(self.x_pk.as_bytes());
         buf.extend_from_slice(self.ed_pk.as_bytes());
+        buf.extend_from_slice(&self.kb_pk);
+        buf.extend_from_slice(&self.dl_pk);
         buf
     }
     pub fn verify(&self, signature: (ed25519_dalek::Signature, [u8; pqc_dilithium::SIGNBYTES]), data: Vec<u8>) -> Result<(), &'static str> {
@@ -89,5 +108,62 @@ impl PublicBundle {
         pqc_dilithium::verify(&signature.1, &hash, &self.dl_pk).map_err(|_| "Dilithium verifying failed")?;
         
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rand::rngs::OsRng;
+    use crate::bundles::PrivateBundle;
+
+    #[test]
+    fn test_shared_secret() {
+        let x_sk1 = x25519_dalek::StaticSecret::random_from_rng(&mut OsRng);
+        let ed_sk1 = ed25519_dalek::SigningKey::generate(&mut OsRng);
+        let kb_seed1 = [1u8; 32];
+        let dl_seed1 = [2u8; 32];
+
+        let x_sk2 = x25519_dalek::StaticSecret::random_from_rng(&mut OsRng);
+        let ed_sk2 = ed25519_dalek::SigningKey::generate(&mut OsRng);
+        let kb_seed2 = [3u8; 32];
+        let dl_seed2 = [4u8; 32];
+
+        let alice = PrivateBundle::new(&x_sk1, &ed_sk1, kb_seed1, dl_seed1);
+        let bob = PrivateBundle::new(&x_sk2, &ed_sk2, kb_seed2, dl_seed2);
+
+        let alice_pub = alice.public();
+        let bob_pub = bob.public();
+
+        let (ct, alice_shared) = alice.shared(&bob_pub).expect("Alice shared failed");
+        let bob_shared = bob.shared_from_ct(&alice_pub, &ct).expect("Bob shared_from_ct failed");
+
+        assert_eq!(alice_shared, bob_shared, "Shared secrets must match");
+    }
+
+    #[test]
+    fn test_deterministic_generation() {
+        let x_sk = x25519_dalek::StaticSecret::random_from_rng(&mut OsRng);
+        let ed_sk = ed25519_dalek::SigningKey::generate(&mut OsRng);
+        let kb_seed = [1u8; 32];
+        let dl_seed = [2u8; 32];
+
+        let alice1 = PrivateBundle::new(&x_sk, &ed_sk, kb_seed, dl_seed);
+        let alice2 = PrivateBundle::new(&x_sk, &ed_sk, kb_seed, dl_seed);
+        
+        assert_eq!(alice1.public().as_bytes(), alice2.public().as_bytes(), "Equivalent bundles must match");
+    }
+
+    #[test]
+    fn test_sign_and_verify() {
+        let priv_bundle = PrivateBundle::random();
+        let pub_bundle = priv_bundle.public();
+
+        let message = b"Hello, world!".to_vec();
+        let mut signature = priv_bundle.sign(message.clone());
+
+        assert!(pub_bundle.verify(signature, message.clone()).is_ok(), "Signature verification failed");
+        signature.1[0] += 1;
+
+        assert!(pub_bundle.verify(signature, message.clone()).is_err(), "Signature verification failed");
     }
 }

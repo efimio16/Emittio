@@ -55,3 +55,16 @@ impl Envelope {
         utils::info(b"message-key-", count)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{bundles::PrivateBundle, envelope::Envelope};
+
+    #[test]
+    fn test_envelope() {
+        let sender = PrivateBundle::random();
+        let recipient = PrivateBundle::random();
+        let envelope = Envelope::encrypt(b"Hello world!", 1, sender, recipient.public()).unwrap();
+        assert_eq!(envelope.decrypt(recipient).unwrap(), b"Hello world!", "Text must match");
+    }
+}
