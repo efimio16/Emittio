@@ -1,29 +1,27 @@
 # <img src="assets/logo.png" alt="Emittio logo" style="height: 1em"/> Emittio
 
-*Anonymous, decentralized email. Powered by IPFS and end-to-end encryption.*
+*Anonymous, decentralized email. Powered by IPFS & end-to-end encryption.*
 
 🌐 [Website](https://emittio.vercel.app/) | 📣 [Telegram](https://t.me/EmittioMail)
 
 ## Why Emittio?
 
-> A next-gen email protocol designed for privacy, resilience, and full user control.
+> A next-gen email protocol designed for anonymity, resilience, and full user control.
 
 We're building a mail system that is:
 
 - 🕸️ **Decentralized** — no central servers, no single point of failure  
 - 🔐 **End-to-end encrypted** — only sender and recipient can read the content  
 - 👤 **Anonymous** — no IDs or accounts
-- ⚡️ **Efficient** — fast delivery, minimal cost
+- ⚡️ **Efficient** — fast delivery
 
-## Architecture Overview
+## Architecture
 
 | Component | Role |
 |-|-|
-| **Inbox** | Unique address per contact you give to hide your real identity |
+| **Inboxes** | Anonymous mail addresses |
 | **IPFS** | Allows to find inboxes and encrypted mails in network |
-| **Nodes** | Save encrypted content |
-
-> 📦 Messages are encrypted and chunked, then routed via multiple nodes using quorum consensus and replication strategies.
+| **Nodes** | Save and replicate encrypted content |
 
 ## Roadmap
 

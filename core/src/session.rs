@@ -1,10 +1,10 @@
 use rand::{RngCore, rngs::OsRng};
 
-use crate::{bundles::{PrivateBundle, PublicBundle}, inbox::Inbox, utils};
+use crate::{bundles::{PrivateBundle}, inbox::Inbox, utils};
 
 pub struct Session {
     seed: [u8; 32],
-    inbox_counter: u32,
+    // inbox_counter: u32,
 }
 
 impl Session {
@@ -14,29 +14,11 @@ impl Session {
         
         Self { 
             seed,
-            inbox_counter: 0,
+            // inbox_counter: 0,
         }
     }
-    pub fn invite(&mut self) -> PublicBundle {
-        let inbox_bundle = self.inbox_keys(self.inbox_counter);
-        self.inbox_counter += 1;
-
-        inbox_bundle.public()
-    }
-    pub fn new_inbox(&mut self, with: PublicBundle) -> Inbox {
-        let inbox_bundle = self.inbox_keys(self.inbox_counter);
-        self.inbox_counter += 1;
-
-        Inbox::new(
-            inbox_bundle,
-            with
-        )
-    }
-    pub fn inbox(&self, index: u32, with: PublicBundle) -> Inbox {
-        Inbox::new(
-            self.inbox_keys(index),
-            with
-        )
+    pub fn inbox(&self, index: u32) -> Inbox {
+        Inbox::new(self.inbox_keys(index))
     }
     fn inbox_keys(&self, inbox_counter: u32) -> PrivateBundle {
         let x_sk = utils::derive(&self.seed, &utils::info(b"x25519-key-", inbox_counter));

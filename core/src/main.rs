@@ -11,16 +11,20 @@ use crate::{session::Session};
 fn main() {
     let start = Instant::now();
 
-    let mut alice = Session::new();
-    let mut bob = Session::new();
+    let alice = Session::new();
+    let bob = Session::new();
+    println!("Sessions initialized");
 
-    let mut alice_to_bob = alice.new_inbox(bob.invite());
-    let envelope = alice_to_bob.new_envelope(b"Hello, Bob! How are you?").expect("Failed to create envelope");
-    
-    let bob_to_alice = bob.inbox(0, alice_to_bob.sender.public());
-    let plaintext = envelope.decrypt(bob_to_alice.sender).unwrap();
+    let mut alice_inbox = alice.inbox(0);
+    let bob_inbox = bob.inbox(0);
+    println!("Inboxes initialized");
 
+    let envelope = alice_inbox.new_envelope(bob_inbox.sender.public(), b"Hello, Bob! How are you?").expect("Failed to create envelope");
+    println!("Encrypted: {:x?}", envelope.as_bytes());
+
+    let plaintext = envelope.decrypt(bob_inbox.sender).unwrap();
     assert_eq!(&plaintext, b"Hello, Bob! How are you?");
+    println!("Decrypted: {}", str::from_utf8(&plaintext).unwrap());
     
     let duration = start.elapsed();
     println!("⏱ Completed in: {:?}", duration);
