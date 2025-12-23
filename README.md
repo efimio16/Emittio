@@ -17,14 +17,14 @@ We're building a mail system that is:
 
 ## 🏠 Architecture
 
-With other words, "how".
+In other words, how it works.
 
 | Component | Role |
 |-|-|
 | **Inbox** | Public key representing a mail addresses |
-| **Session** | Basicly, it's a seed from which are derived inbox keys. Sessions are never stored in the network, meaning there aren't accounts in classical sense |
+| **Session** | Basically, it's a seed from which are derived inbox keys. Sessions are never stored in the network, meaning there aren't accounts in classical sense |
 | **Tags** | Small parts of data on network representing encrypted states such as last refresh time or a pointer to an envelope. These are the main optimization |
-| **Envelope** | This is an anonymous version of the mail, i.e. there's all encrypted including metadata: sender, recipient and time. But for an efficient lookup, each envelope has a pointer: a hash of shared secret of the recipient and the envelope (not the sender). |
+| **Envelope** | This is an anonymous version of the mail; all data, including the metadata is encrypted: sender, recipient and time. But for an efficient lookup, each envelope has a pointer: a hash of shared secret of the recipient and the envelope (not the sender). |
 | **DHT** | Allows to store and find encrypted mails in network |
 | **Mixnet** | Routes onion-like data through 3 hops (prevents IP correlation) and sends a lot of dummy requests (partially prevents timing correlation) |
 | **Nodes** | Save encrypted content and forward onion-like messages |
@@ -44,7 +44,7 @@ With other words, "how".
 
 ## 🟢 Status
 
-> MVP design in progress. Community contributors welcome!
+Currently working on the MVP; looking for feedback on architecture.
 
 ## 🛠️ Tech Stack
 
