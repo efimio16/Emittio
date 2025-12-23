@@ -1,5 +1,7 @@
 use hkdf::Hkdf;
-use sha2::{Digest, Sha256};
+use serde::{Deserialize, Serialize};
+use sha2::{Sha256};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub fn info(a: &[u8], b: u32) -> Vec<u8> {
     let mut info = Vec::new();
@@ -17,7 +19,21 @@ pub fn derive(seed: &[u8], info: &[u8]) -> [u8; 32] {
 }
 
 pub fn hash(data: &[u8]) -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    hasher.update(data);
-    hasher.finalize().into()
+    blake3::hash(data).into()
+}
+
+pub fn get_timestamp() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_secs()
+}
+
+pub fn serialize<T>(value: &T) -> Result<Vec<u8>, String>
+where T: Serialize + ?Sized {
+    postcard::to_allocvec(value).map_err(|_| "serialization failed".into())
+}
+
+pub fn deserialize<'a, T: Deserialize<'a>>(s: &'a [u8]) -> Result<T, String> {
+    postcard::from_bytes(s).map_err(|_| "deserialization failed".into())
 }

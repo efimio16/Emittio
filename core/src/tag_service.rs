@@ -1,0 +1,154 @@
+use std::{collections::BTreeMap, path::PathBuf};
+use tokio::{fs::OpenOptions, io::{AsyncReadExt, AsyncWriteExt}, sync::{mpsc, oneshot}, time::{Duration, interval}};
+
+use crate::{tag::Tag, utils};
+
+// const TTL_PRODUCTION: usize = 3600 * 24 * 7;
+const TTL_DEVELOPMENT: usize = 20;
+const MIN_HASH: [u8; 32] = [0u8; 32];
+
+pub struct TagDispatcher {
+    pub tag_tx: mpsc::Sender<Tag>,
+    pub get_tx: mpsc::Sender<oneshot::Sender<Vec<Tag>>>,
+}
+
+pub struct TagService {
+    tag_rx: mpsc::Receiver<Tag>,
+    get_rx: mpsc::Receiver<oneshot::Sender<Vec<Tag>>>,
+    tags: BTreeMap<(u64, [u8; 32]), Tag>,
+    ttl_seconds: u64,
+    path: PathBuf,
+}
+
+impl TagService {
+    pub fn new(path: PathBuf) -> (Self, TagDispatcher) {
+        let (tag_tx, tag_rx) = mpsc::channel(10000);
+        let (get_tx, get_rx) = mpsc::channel(10000);
+        (
+            Self { tag_rx, get_rx, tags: BTreeMap::new(), ttl_seconds: TTL_DEVELOPMENT as u64, path },
+            TagDispatcher { tag_tx, get_tx }
+        )
+    }
+
+    pub async fn load(&mut self) -> Result<(), String> {
+        let mut file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .read(true)
+            .open(self.path.clone())
+            .await.map_err(|e| e.to_string())?;
+
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer).await.map_err(|e| e.to_string())?;
+
+        self.tags.append(&mut utils::deserialize(&buffer)?);
+        Ok(())
+    }
+
+    pub async fn run(&mut self) -> Result<(), String> {
+        let mut options = OpenOptions::new();
+        let mut ticker = interval(Duration::from_secs(5));
+        
+        loop {
+            tokio::select! {
+                _ = ticker.tick() => {
+                    while let Ok(tag) = self.tag_rx.try_recv() {
+                        self.tags.insert((tag.created_at, tag.hash), tag);
+                    }
+
+                    let expire_time = utils::get_timestamp() - self.ttl_seconds;
+
+                    let mut expired = self.tags.split_off(&(expire_time + 1, MIN_HASH));
+                    std::mem::swap(&mut self.tags, &mut expired);
+
+                    
+                    let mut file = options.write(true).create(true).open(self.path.clone())
+                        .await.map_err(|e| e.to_string())?;
+
+                    file.set_len(0).await.map_err(|_| "truncate failed")?;
+                    file.write_all(&utils::serialize(&self.tags)?).await.map_err(|_| "save tags failed")?;
+                },
+                Some(reply_tx) = self.get_rx.recv() => {
+                    let tags_vec: Vec<_> = self.tags.values().cloned().collect();
+                    reply_tx.send(tags_vec).map_err(|_| "send failed".to_string())?;
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+    use tokio::{sync::oneshot, time::sleep};
+
+    use crate::{tag::{Tag, TagPayload}, tag_service::{TagDispatcher, TagService}};
+
+    fn setup_service(path: &str) -> TagDispatcher {
+        let (mut service, dispatcher) = TagService::new(path.into());
+        tokio::spawn(async move { service.run().await.unwrap() });
+
+        dispatcher
+    }
+
+    fn example_tag() -> Tag {
+        Tag::new(&rand::random(), TagPayload { data: b"Hello!".into() }).unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_tag_exists() {
+        let dispatcher = setup_service("tags1.bin");
+        let tag = example_tag();
+
+        dispatcher.tag_tx.send(tag.clone()).await.expect("send tag failed");
+
+        println!("Waiting 5 seconds...");
+        sleep(Duration::from_secs(5)).await;
+        
+        let (tx, rx) = oneshot::channel();
+        dispatcher.get_tx.send(tx).await.expect("send tx failed");
+
+        let tags = rx.await.expect("receive tags failed");
+        assert_eq!(tags[0].hash, tag.hash);
+    }
+
+    #[tokio::test]
+    async fn test_tag_disappears() {
+        let dispatcher = setup_service("tags2.bin");
+        let tag = example_tag();
+
+        dispatcher.tag_tx.send(tag.clone()).await.expect("send tag failed");
+
+        println!("Waiting 25 seconds...");
+        sleep(Duration::from_secs(25)).await;
+
+        let (tx, rx) = oneshot::channel();
+        dispatcher.get_tx.send(tx).await.expect("send tx failed");
+
+        let tags = rx.await.expect("receive tags failed");
+        assert_eq!(tags.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_load_from_file() {
+        let dispatcher_1 = setup_service("tags3.bin");
+        let tag = example_tag();
+
+        dispatcher_1.tag_tx.send(tag.clone()).await.expect("send tag failed");
+
+        println!("Waiting 5 seconds...");
+        sleep(Duration::from_secs(5)).await;
+
+        println!("Waiting 1 more second...");
+        sleep(Duration::from_secs(1)).await;
+
+        let (mut service, dispatcher_2) = TagService::new("tags3.bin".into());
+        tokio::spawn(async move { service.load().await.unwrap(); service.run().await.unwrap() });
+
+        let (tx, rx) = oneshot::channel();
+        dispatcher_2.get_tx.send(tx).await.expect("send tx failed");
+
+        let tags = rx.await.expect("receive tags failed");
+        assert_eq!(tags[0].hash, tag.hash);
+    }
+}

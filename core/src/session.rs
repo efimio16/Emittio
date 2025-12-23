@@ -1,4 +1,4 @@
-use rand::{RngCore, rngs::OsRng};
+use rand;
 
 use crate::{bundles::{PrivateBundle}, inbox::Inbox, utils};
 
@@ -9,13 +9,7 @@ pub struct Session {
 
 impl Session {
     pub fn new() -> Self {
-        let mut seed = [0u8; 32];
-        OsRng::fill_bytes(&mut OsRng, &mut seed);
-        
-        Self { 
-            seed,
-            // inbox_counter: 0,
-        }
+        Self { seed: rand::random() }
     }
     pub fn inbox(&self, index: u32) -> Inbox {
         Inbox::new(self.inbox_keys(index))

@@ -50,26 +50,40 @@ impl PrivateBundle {
             dl_pk: dl.public,
         }
     }
+    pub fn from_seed(seed: &[u8; 32]) -> Self {
+        let x_sk = utils::derive(seed, b"x25519-key");
+        let ed_sk = utils::derive(seed, b"ed25519-key");
+        let kb_seed = utils::derive(seed, b"kb-seed");
+        let dl_seed = utils::derive(seed, b"dl-seed");
+        
+        Self::new(&x25519_dalek::StaticSecret::from(x_sk), &ed25519_dalek::SigningKey::from_bytes(&ed_sk), kb_seed, dl_seed)
+    }    
     pub fn public(&self) -> PublicBundle {
         PublicBundle::new(&self.x_pk, &self.ed_pk, &self.kb_pk, &self.dl_pk)
     }
     pub fn shared(&self, other: &PublicBundle) -> Result<([u8; pqc_kyber::KYBER_CIPHERTEXTBYTES], Vec<u8>), &'static str> {
-        let x_shared = self.x_sk.diffie_hellman(&other.x_pk).to_bytes();
-        if x_shared == [0u8; 32] {
-            return Err("Invalid shared key");
-        }
-
-        let (ct, kb_shared) = pqc_kyber::encapsulate(&other.kb_pk, &mut OsRng).map_err(|_| "Encapsulation failed")?;
-        Ok((ct, [x_shared, kb_shared].concat()))
+        let (ct, kb_shared) = self.encapsulate(other)?;
+        Ok((ct, [self.x_shared(other)?, kb_shared].concat()))
     }
     pub fn shared_from_ct(&self, other: &PublicBundle, ct: &[u8; pqc_kyber::KYBER_CIPHERTEXTBYTES]) -> Result<Vec<u8>, &'static str> {
+        Ok([self.x_shared(other)?, self.decapsulate(ct)?].concat())
+    }
+
+    pub fn x_shared(&self, other: &PublicBundle) -> Result<[u8; 32], &'static str> {
         let x_shared = self.x_sk.diffie_hellman(&other.x_pk).to_bytes();
         if x_shared == [0u8; 32] {
             return Err("Invalid shared key");
         }
-
-        let kb_shared = pqc_kyber::decapsulate(ct, &self.kb_sk).map_err(|_| "Decapsulation failed")?;
-        Ok([x_shared, kb_shared].concat())
+        Ok(x_shared)
+    }
+    pub fn encapsulate(&self, other: &PublicBundle) -> Result<([u8; pqc_kyber::KYBER_CIPHERTEXTBYTES], pqc_kyber::SharedSecret), &'static str> {
+        pqc_kyber::encapsulate(&other.kb_pk, &mut OsRng).map_err(|_| "Encapsulation failed")
+    }
+    pub fn encapsulate_from_seed(&self, other: &PublicBundle, seed: [u8; 32]) -> Result<([u8; pqc_kyber::KYBER_CIPHERTEXTBYTES], pqc_kyber::SharedSecret), &'static str> {
+        pqc_kyber::encapsulate(&other.kb_pk, &mut ChaCha20Rng::from_seed(seed)).map_err(|_| "Encapsulation failed")
+    }
+    pub fn decapsulate(&self, ct: &[u8; pqc_kyber::KYBER_CIPHERTEXTBYTES]) -> Result<pqc_kyber::SharedSecret, &'static str> {
+        pqc_kyber::decapsulate(ct, &self.kb_sk).map_err(|_| "Decapsulation failed")
     }
     pub fn sign(&self, data: Vec<u8>) -> (ed25519_dalek::Signature, [u8; pqc_dilithium::SIGNBYTES]) {
         let hash = utils::hash(&data);

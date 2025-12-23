@@ -33,8 +33,8 @@ With other words, "how".
 ## 🛣️ Roadmap
 
 1. [x] Alice-Bob cryptography system prototype in Rust
-2. [ ] `Client`, `Node` and `MockTransport` abstractions
-3. [ ] Tags, their storage and lookup
+2. [x] `Client`, `Node` and `MockTransport` abstractions
+3. [x] Tags, their storage and lookup
 4. [ ] DHT
 5. [ ] QUIC and/or TCP transports
 6. [ ] Mixnet (onion-like routing & dummy requests)
