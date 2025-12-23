@@ -10,36 +10,53 @@
 
 We're building a mail system that is:
 
-- 🕸️ **Decentralized** — no central servers, no single point of failure  
-- 🔐 **End-to-end encrypted** — only sender and recipient can read the content  
+- 🕸️ **Decentralized** — no central servers, no single point of failure.
+- 🔐 **End-to-end encrypted** — only sender and recipient can read the content.
 - 👤 **Anonymous** — no IDs or accounts
 - ⚡️ **Efficient** — fast delivery
 
-## Architecture
+## 🏠 Architecture
+
+With other words, "how".
 
 | Component | Role |
 |-|-|
-| **Inboxes** | Anonymous mail addresses |
-| **IPFS** | Allows to find inboxes and encrypted mails in network |
-| **Nodes** | Save and replicate encrypted content |
+| **Inbox** | Public key representing a mail addresses |
+| **Session** | Basicly, it's a seed from which are derived inbox keys. Sessions are never stored in the network, meaning there aren't accounts in classical sense |
+| **Tags** | Small parts of data on network representing encrypted states such as last refresh time or a pointer to an envelope. These are the main optimization |
+| **Envelope** | This is an anonymous version of the mail, i.e. there's all encrypted including metadata: sender, recipient and time. But for an efficient lookup, each envelope has a pointer: a hash of shared secret of the recipient and the envelope (not the sender). |
+| **DHT** | Allows to store and find encrypted mails in network |
+| **Mixnet** | Routes onion-like data through 3 hops (prevents IP correlation) and sends a lot of dummy requests (partially prevents timing correlation) |
+| **Nodes** | Save encrypted content and forward onion-like messages |
+| **Quorums** | Pseudo-random groups of nodes that temporarily caches envelope's pointer to a group of inboxes. In this way client checks only part of envelopes instead of scanning the whole network |
 
-## Roadmap
+## 🛣️ Roadmap
 
-1. [ ] Cryptography system prototype in Rust
-2. [ ] IPFS node for storing mails with replication
-3. [ ] Svelte web client
+1. [x] Alice-Bob cryptography system prototype in Rust
+2. [ ] `Client`, `Node` and `MockTransport` abstractions
+3. [ ] Tags, their storage and lookup
+4. [ ] DHT
+5. [ ] QUIC and/or TCP transports
+6. [ ] Mixnet (onion-like routing & dummy requests)
+7. [ ] Quorums
+8. [ ] UX & UI prototyping
+9. [ ] Svelte web client
 
-## Status
+## 🟢 Status
 
 > MVP design in progress. Community contributors welcome!
 
-## Tech Stack (Planned)
+## 🛠️ Tech Stack
 
-- IPFS on QUIC protocol
+- X25519 and Kyber512 for shared secret
+- Ed25519 and dilithium for signatures
+- ChaCha20Poly1305 for envelopes and AES-GCM for onion traffic and tags
+- BLAKE3 for hashes and SHA256 for PoW hashes
+- DHT on QUIC protocol
 - Rust (nodes)
-- Svelte (web client)
+- Svelte + WASM (web client)
 
-## Support
+## ❤️ Support
 
 - BTC: `bc1qq90dh06ah92sg6unfnsn0edx9l9a9msfpagh3f`
 - ETH: `0xB9be3CbB7Dc9f9C104640899AeF4A1b4147f9e21`
