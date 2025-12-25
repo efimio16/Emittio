@@ -5,8 +5,21 @@ use aes_gcm::{
     AeadCore, Aes256Gcm, AesGcm, aead::{self, Aead, KeyInit}, aes::Aes256
 };
 use bytes::{BufMut, Bytes, BytesMut};
+use thiserror::Error;
 
-use crate::{VERSION, utils::{self, deserialize, serialize}};
+use crate::{VERSION, utils::{self, SerdeError, deserialize, serialize}};
+
+#[derive(Debug, Error)]
+pub enum TagError {
+    #[error(transparent)]
+    Serde(#[from] SerdeError),
+
+    #[error("encryption failed")]
+    AesGcmEncryption(aes_gcm::Error),
+
+    #[error("decryption failed")]
+    AesGcmDecryption(aes_gcm::Error),
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Tag {
@@ -19,7 +32,7 @@ pub struct Tag {
 }
 
 impl Tag {
-    pub fn new(seed: &[u8; 32], plaintext: TagPayload) -> Result<Self, String> {
+    pub fn new(seed: &[u8; 32], plaintext: TagPayload) -> Result<Self, TagError> {
         let info = rand::random();
         let hash = Self::hash(seed, &info);
 
@@ -30,10 +43,10 @@ impl Tag {
         let content = Self::cipher(seed).encrypt(
             &nonce,
             aead::Payload {
-                msg: &serialize(&plaintext).map_err(|_| "serialization failed".to_string())?,
+                msg: &serialize(&plaintext)?,
                 aad: &Self::aad(created_at, &info),
             },
-        ).map_err(|_| "encryption failed".to_string())?;
+        ).map_err(TagError::AesGcmEncryption)?;
 
         Ok(Self { hash, nonce: nonce.into(), info, content, created_at })
     }
@@ -53,7 +66,7 @@ impl Tag {
     pub fn is_owner(&self, seed: &[u8; 32]) -> bool {
         Self::hash(seed, &self.info) == self.hash
     }
-    pub fn decrypt(&self, seed: &[u8; 32]) -> Result<TagPayload, String> {
+    pub fn decrypt(&self, seed: &[u8; 32]) -> Result<TagPayload, TagError> {
         let payload = deserialize(
             &Self::cipher(seed).decrypt(
                 &self.nonce.into(),
@@ -61,22 +74,23 @@ impl Tag {
                     msg: &self.content,
                     aad: &Self::aad(self.created_at, &self.info),
                 },
-            ).map_err(|_| "decryption failed".to_string())?
-        ).map_err(|_| "deserialization failed".to_string())?;
+            ).map_err(TagError::AesGcmDecryption)?
+        )?;
         Ok(payload)
     }
-    pub fn to_owned_tag(&self, seed: &[u8; 32]) -> Result<OwnedTag, String> {
+    pub fn to_owned_tag(&self, seed: &[u8; 32]) -> Result<OwnedTag, TagError> {
         Ok(OwnedTag { tag: self.clone(), payload: self.decrypt(seed)? })
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct OwnedTag {
     pub tag: Tag,
     pub payload: TagPayload,
 }
 
 impl OwnedTag {
-    pub fn new(seed: &[u8; 32], payload: TagPayload) -> Result<Self, String> {
+    pub fn new(seed: &[u8; 32], payload: TagPayload) -> Result<Self, TagError> {
         Ok(Self { tag: Tag::new(seed, payload.clone())?, payload })
     }
 }
@@ -98,13 +112,18 @@ impl TagManager {
     pub fn from_seed(seed: &[u8; 32]) -> Self {
         Self { seed: *seed, tags: Vec::new() }
     }
-    pub fn load_tags(&mut self, all_tags: Vec<Tag>) -> Result<(), String> {
+    pub fn load_tags(&mut self, all_tags: Vec<Tag>) -> Result<(), TagError> {
         for tag in all_tags {
             if tag.is_owner(&self.seed) {
                 self.tags.push(tag.to_owned_tag(&self.seed)?);
             }
         }
         Ok(())
+    }
+    pub fn new_tag(&mut self, payload: TagPayload) -> Result<OwnedTag, TagError> {
+        let tag = OwnedTag::new(&self.seed, payload)?;
+        self.tags.push(tag.clone());
+        Ok(tag)
     }
 }
 

@@ -2,6 +2,16 @@ use hkdf::Hkdf;
 use serde::{Deserialize, Serialize};
 use sha2::{Sha256};
 use std::time::{SystemTime, UNIX_EPOCH};
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum SerdeError {
+    #[error("serialization failed: {0}")]
+    Serialize(postcard::Error),
+
+    #[error("deserialization failed: {0}")]
+    Deserialize(postcard::Error),
+}
 
 pub fn info(a: &[u8], b: u32) -> Vec<u8> {
     let mut info = Vec::new();
@@ -29,11 +39,11 @@ pub fn get_timestamp() -> u64 {
         .as_secs()
 }
 
-pub fn serialize<T>(value: &T) -> Result<Vec<u8>, String>
+pub fn serialize<T>(value: &T) -> Result<Vec<u8>, SerdeError>
 where T: Serialize + ?Sized {
-    postcard::to_allocvec(value).map_err(|_| "serialization failed".into())
+    postcard::to_allocvec(value).map_err(SerdeError::Serialize)
 }
 
-pub fn deserialize<'a, T: Deserialize<'a>>(s: &'a [u8]) -> Result<T, String> {
-    postcard::from_bytes(s).map_err(|_| "deserialization failed".into())
+pub fn deserialize<'a, T: Deserialize<'a>>(s: &'a [u8]) -> Result<T, SerdeError> {
+    postcard::from_bytes(s).map_err(SerdeError::Deserialize)
 }

@@ -1,10 +1,19 @@
 use std::collections::HashMap;
-
 use tokio::sync::{mpsc, oneshot};
+use thiserror::Error;
 
-use crate::{channels, message::{IncomingMessage, MsgId, OutgoingMessage, Payload, Reply}};
+use crate::{channels::ChannelError, message::{IncomingMessage, MsgId, OutgoingMessage, Payload, Reply}, transport::TransportDispatcher};
 
 const MAX_PENDING: usize = 1024;
+
+#[derive(Debug, Error)]
+pub enum ClientServiceError {
+    #[error(transparent)]
+    Channel(#[from] ChannelError),
+
+    #[error("Too many pending")]
+    TooManyPending,
+}
 
 pub struct ClientCmd {
     pub msg: OutgoingMessage,
@@ -13,12 +22,12 @@ pub struct ClientCmd {
 
 pub struct ClientService {
     cmd_rx: mpsc::Receiver<ClientCmd>,
-    chans: channels::Dispatcher<IncomingMessage, OutgoingMessage>,
+    chans: TransportDispatcher,
     pending: HashMap<MsgId, oneshot::Sender<Reply>>,
 }
 
 impl ClientService {
-    pub fn new(cmd_rx: mpsc::Receiver<ClientCmd>, chans: channels::Dispatcher<IncomingMessage, OutgoingMessage>) -> Self {
+    pub fn new(cmd_rx: mpsc::Receiver<ClientCmd>, chans: TransportDispatcher) -> Self {
         Self {
             cmd_rx,
             chans,
@@ -26,29 +35,29 @@ impl ClientService {
         }
     }
 
-    pub async fn run(&mut self) -> Result<(), String> {
+    pub async fn run(&mut self) -> Result<(), ClientServiceError> {
         loop {
             tokio::select! {
                 Some(cmd) = self.cmd_rx.recv() => { self.handle_cmd(cmd).await?; }
-                Some(msg) = self.chans.rx.recv() => { self.handle_recv(msg)?; }
+                Some(msg) = self.chans.recv() => { self.handle_recv(msg)?; }
             }
         }
     }
 
-    async fn handle_cmd(&mut self, cmd: ClientCmd) -> Result<(), String> {
+    async fn handle_cmd(&mut self, cmd: ClientCmd) -> Result<(), ClientServiceError> {
         if self.pending.len() >= MAX_PENDING {
-            return Err("Too many pending".into());
+            return Err(ClientServiceError::TooManyPending);
         }
 
         self.pending.insert(cmd.msg.id.clone(), cmd.reply_tx);
-        self.chans.tx.send(cmd.msg).await.map_err(|_| "Send failed")?;
+        self.chans.send(cmd.msg).await?;
         Ok(())
     }
 
-    fn handle_recv(&mut self, msg: IncomingMessage) -> Result<(), String> {
+    fn handle_recv(&mut self, msg: IncomingMessage) -> Result<(), ChannelError> {
         if let Payload::Reply(reply) = msg.payload {
             if let Some(tx) = self.pending.remove(&msg.id) {
-                tx.send(reply).map_err(|_| "send failed")?;
+                tx.send(reply).map_err(|_| ChannelError::Closed)?;
             }
         }
         Ok(())

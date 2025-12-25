@@ -1,33 +1,30 @@
-use tokio::sync::oneshot;
-
-use crate::{channels, message::{IncomingMessage, OutgoingMessage, Payload, Query, Reply}, pow::Pow, tag_service::TagDispatcher};
+use crate::{channels::{self, ChannelError}, message::{IncomingMessage, OutgoingMessage, Payload, Query, Reply}, pow::Pow, tag_service::TagDispatcher, transport::{TransportDispatcher, TransportHandler}};
 
 pub struct Node {
     secret: [u8; 32],
     tag_dispatcher: TagDispatcher,
-    pub chans: channels::Dispatcher<IncomingMessage, OutgoingMessage>,
+    pub chans: TransportDispatcher,
 }
 
 impl Node {
-    pub fn new(tag_dispatcher: TagDispatcher) -> (Self, channels::Handler<OutgoingMessage, IncomingMessage>) {
+    pub fn new(tag_dispatcher: TagDispatcher) -> (Self, TransportHandler) {
         let (chans, handler) = channels::new(128);
 
         (Self { tag_dispatcher, secret: rand::random(), chans }, handler)
     }
 
-    pub async fn run(&mut self) -> Result<(), String> {
-        while let Some(msg) = self.chans.rx.recv().await {
+    pub async fn run(&mut self) -> Result<(), ChannelError> {
+        while let Some(msg) = self.chans.recv().await {
             if let Payload::Query(query) = &msg.payload {
                 match query {
                     Query::GetTags => {
-                        let (tx, rx) = oneshot::channel();
-                        self.tag_dispatcher.get_tx.send(tx).await.map_err(|_| "send failed".to_string())?;
-                        self.reply(&msg, Reply::ReturnTags(rx.await.map_err(|_| "oneshot receive failed".to_string())?)).await?;
+                        let tags = self.tag_dispatcher.get_tags().await?;
+                        self.reply(&msg, Reply::ReturnTags(tags)).await?;
                     },
                     Query::PublishTag { tag, pow, nonce } => {
                         if pow.verify_with_secret(&self.secret, *nonce) {
                             println!("Tag to publish: {:#?}", tag.clone());
-                            self.tag_dispatcher.tag_tx.send(tag.clone()).await.map_err(|_| "send failed".to_string())?;
+                            self.tag_dispatcher.send_tag(tag.clone()).await?;
                             self.reply(&msg, Reply::Ok).await?;
                         } else {
                             self.reply(&msg, Reply::Err("Incorrect PoW".into())).await?;
@@ -42,11 +39,10 @@ impl Node {
         Ok(())
     }
 
-    pub async fn send(&mut self, message: OutgoingMessage) -> Result<(), String> {
-        self.chans.tx.send(message).await.map_err(|e| format!("Failed to send message: {:?}", e))?;
-        Ok(())
+    pub async fn send(&mut self, message: OutgoingMessage) -> Result<(), ChannelError> {
+        self.chans.send(message).await
     }
-    pub async fn reply(&mut self, message: &IncomingMessage, reply: Reply) -> Result<(), String> {
+    pub async fn reply(&mut self, message: &IncomingMessage, reply: Reply) -> Result<(), ChannelError> {
         self.send(message.reply(reply)).await
     }
 }

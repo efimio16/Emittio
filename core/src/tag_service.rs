@@ -1,15 +1,39 @@
 use std::{collections::BTreeMap, path::PathBuf};
 use tokio::{fs::OpenOptions, io::{AsyncReadExt, AsyncWriteExt}, sync::{mpsc, oneshot}, time::{Duration, interval}};
+use thiserror::Error;
 
-use crate::{tag::Tag, utils};
+use crate::{channels::ChannelError, tag::Tag, utils::{self, SerdeError}};
 
 // const TTL_PRODUCTION: usize = 3600 * 24 * 7;
 const TTL_DEVELOPMENT: usize = 20;
 const MIN_HASH: [u8; 32] = [0u8; 32];
 
+#[derive(Debug, Error)]
+pub enum TagServiceError {
+    #[error(transparent)]
+    Serde(#[from] SerdeError),
+
+    #[error(transparent)]
+    Io(#[from] tokio::io::Error),
+
+    #[error(transparent)]
+    Channel(#[from] ChannelError),
+}
+
 pub struct TagDispatcher {
     pub tag_tx: mpsc::Sender<Tag>,
     pub get_tx: mpsc::Sender<oneshot::Sender<Vec<Tag>>>,
+}
+
+impl TagDispatcher {
+    pub async fn send_tag(&self, tag: Tag) -> Result<(), ChannelError> {
+        self.tag_tx.send(tag).await.map_err(|_| ChannelError::Closed)
+    }
+    pub async fn get_tags(&mut self) -> Result<Vec<Tag>, ChannelError> {
+        let (tx, rx) = oneshot::channel();
+        self.get_tx.send(tx).await.map_err(|_| ChannelError::Closed)?;
+        rx.await.map_err(|_| ChannelError::Closed)
+    }
 }
 
 pub struct TagService {
@@ -30,23 +54,25 @@ impl TagService {
         )
     }
 
-    pub async fn load(&mut self) -> Result<(), String> {
+    pub async fn load(&mut self) -> Result<(), TagServiceError> {
         let mut file = OpenOptions::new()
             .create(true)
             .write(true)
             .read(true)
             .open(self.path.clone())
-            .await.map_err(|e| e.to_string())?;
+            .await?;
 
         let mut buffer = Vec::new();
-        file.read_to_end(&mut buffer).await.map_err(|e| e.to_string())?;
+        file.read_to_end(&mut buffer).await?;
 
         self.tags.append(&mut utils::deserialize(&buffer)?);
         Ok(())
     }
 
-    pub async fn run(&mut self) -> Result<(), String> {
+    pub async fn run(&mut self) -> Result<(), TagServiceError> {
         let mut options = OpenOptions::new();
+        options.write(true).create(true);
+
         let mut ticker = interval(Duration::from_secs(5));
         
         loop {
@@ -62,15 +88,14 @@ impl TagService {
                     std::mem::swap(&mut self.tags, &mut expired);
 
                     
-                    let mut file = options.write(true).create(true).open(self.path.clone())
-                        .await.map_err(|e| e.to_string())?;
+                    let mut file = options.open(self.path.clone()).await?;
 
-                    file.set_len(0).await.map_err(|_| "truncate failed")?;
-                    file.write_all(&utils::serialize(&self.tags)?).await.map_err(|_| "save tags failed")?;
+                    file.set_len(0).await?;
+                    file.write_all(&utils::serialize(&self.tags)?).await?;
                 },
                 Some(reply_tx) = self.get_rx.recv() => {
                     let tags_vec: Vec<_> = self.tags.values().cloned().collect();
-                    reply_tx.send(tags_vec).map_err(|_| "send failed".to_string())?;
+                    reply_tx.send(tags_vec).map_err(|_| ChannelError::Closed)?;
                 }
             }
         }

@@ -8,7 +8,6 @@ mod peer;
 mod client;
 mod message;
 mod pow;
-mod network;
 mod node;
 mod client_service;
 mod tag;
@@ -18,7 +17,7 @@ mod channels;
 use std::time::Instant;
 use tokio;
 
-use crate::{client::Client, message::Reply, node::Node, peer::PeerId, session::Session, tag::{Tag, TagManager, TagPayload}, tag_service::TagService, transport::MockTransport};
+use crate::{client::Client, message::Reply, node::Node, peer::PeerId, session::Session, tag::{TagManager, TagPayload}, tag_service::TagService, transport::MockTransport};
 
 
 const VERSION: usize = 1;
@@ -39,18 +38,16 @@ async fn main() {
 
     tokio::spawn(async move { client_service.run().await });
     tokio::spawn(async move { node.run().await });
-    tokio::spawn(async move { tag_service.load().await.expect("load tag service failed"); tag_service.run().await });
+    tokio::spawn(async move { /*tag_service.load().await.expect("load tag service failed");*/ tag_service.run().await });
 
-    let seed = rand::random();
-
-    let mut tag_manager = TagManager::from_seed(&seed);
+    let mut tag_manager = TagManager::new();
     if let Reply::ReturnTags(tags) = client.get_tags(&node_id).await.expect("get tags failed") {
         tag_manager.load_tags(tags).expect("load tags failed");
     }
     
-    let tag = Tag::new(&seed, TagPayload { data: b"Hello!".into() }).expect("failed create tag");
+    let owned_tag = tag_manager.new_tag(TagPayload { data: b"Hello!".into() }).expect("failed create tag");
 
-    client.publish_tag(&node_id, tag).await.expect("Failed to publish tag");
+    client.publish_tag(&node_id, owned_tag.tag).await.expect("Failed to publish tag");
 
     let alice = Session::new();
     let bob = Session::new();

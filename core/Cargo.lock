@@ -204,6 +204,7 @@ dependencies = [
  "rand_chacha",
  "serde",
  "sha2",
+ "thiserror",
  "tokio",
  "tokio-macros",
  "tokio-util",

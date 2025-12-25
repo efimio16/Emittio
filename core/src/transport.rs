@@ -3,29 +3,8 @@ use tokio::sync::mpsc;
 
 use crate::{channels, message::{IncomingMessage, OutgoingMessage}, peer::PeerId, utils::{deserialize, serialize}};
 
-// pub mod transport_params {
-//     use tokio::sync::mpsc;
-
-//     use crate::message::{OutgoingMessage, IncomingMessage};
-
-//     const CHAN_SIZE: usize = 128;
-
-//     pub struct Transport {
-//         pub rx: mpsc::Receiver<OutgoingMessage>,
-//         pub tx: mpsc::Sender<IncomingMessage>,
-//     }
-//     pub struct Service {
-//         pub rx: mpsc::Receiver<IncomingMessage>,
-//         pub tx: mpsc::Sender<OutgoingMessage>,
-//     }
-
-//     pub fn new() -> (Service, Transport) {
-//         let (send_tx, send_rx) = mpsc::channel(CHAN_SIZE);
-//         let (recv_tx, recv_rx) = mpsc::channel(CHAN_SIZE);
-
-//         (Service { rx: recv_rx, tx: send_tx }, Transport { rx: send_rx, tx: recv_tx })
-//     }
-// }
+pub type TransportDispatcher = channels::Participant<IncomingMessage, OutgoingMessage>;
+pub type TransportHandler = channels::Participant<OutgoingMessage, IncomingMessage>;
 
 pub struct MockTransport {
     channels: Arc<Mutex<HashMap<PeerId, mpsc::Sender<IncomingMessage>>>>,
@@ -38,7 +17,7 @@ impl MockTransport {
         }
     }
 
-    pub fn add_peer(&self, peer: PeerId, mut params: channels::Handler<OutgoingMessage, IncomingMessage>) {
+    pub fn add_peer(&self, peer: PeerId, mut params: TransportHandler) {
         let channels = Arc::clone(&self.channels);
         channels.lock().expect("Mutex error").insert(peer.clone(), params.tx);
 

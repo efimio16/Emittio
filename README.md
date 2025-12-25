@@ -21,14 +21,19 @@ In other words, how it works.
 
 | Component | Role |
 |-|-|
-| **Inbox** | Public key representing a mail addresses |
-| **Session** | Basically, it's a seed from which are derived inbox keys. Sessions are never stored in the network, meaning there aren't accounts in classical sense |
-| **Tags** | Small parts of data on network representing encrypted states such as last refresh time or a pointer to an envelope. These are the main optimization |
-| **Envelope** | This is an anonymous version of the mail; all data, including the metadata is encrypted: sender, recipient and time. But for an efficient lookup, each envelope has a pointer: a hash of shared secret of the recipient and the envelope (not the sender). |
+| **Inbox** | A public key that acts as a mailbox identifier |
+| **Session** | A secret seed used to derive inbox keys (no accounts are stored on the network) |
+| **Envelope** | An encrypted message. Metadata (sender, recipient, time) is also encrypted. Each envelope includes a lookup pointer derived from a shared secret with the recipient. |
 | **DHT** | Allows to store and find encrypted mails in network |
 | **Mixnet** | Routes onion-like data through 3 hops (prevents IP correlation) and sends a lot of dummy requests (partially prevents timing correlation) |
 | **Nodes** | Save encrypted content and forward onion-like messages |
-| **Quorums** | Pseudo-random groups of nodes that temporarily caches envelope's pointer to a group of inboxes. In this way client checks only part of envelopes instead of scanning the whole network |
+
+### Optimization components
+
+| Component | Role |
+|-|-|
+| **Tags** | Small encrypted metadata used to optimize lookups |
+| **Quorums** | Temporary node groups that reduce network-wide scanning |
 
 ## 🛣️ Roadmap
 

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::{peer::PeerId, pow::Pow, tag::Tag};
 
@@ -50,6 +51,11 @@ pub enum Query {
     GetPow(Action),
 }
 
+
+#[derive(Debug, Error)]
+#[error("Reply error: {0}")]
+pub struct ReplyErr(String);
+
 #[derive(Serialize, Deserialize)]
 pub enum Reply {
     Empty,
@@ -63,9 +69,9 @@ impl Reply {
     // pub fn is_err(&self) -> bool {
     //     matches!(self, Self::Err(_))
     // }
-    pub fn as_ok(self) -> Result<Self, String> {
+    pub fn as_ok(self) -> Result<Self, ReplyErr> {
         match self {
-            Self::Err(msg) => Err(msg.clone()),
+            Self::Err(msg) => Err(ReplyErr(msg.clone())),
             _ => Ok(self),
         }
     }
