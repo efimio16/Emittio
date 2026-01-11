@@ -1,33 +1,46 @@
 use chacha20poly1305::{AeadCore, KeyInit, XChaCha20Poly1305, aead::Aead};
 use rand::rngs::OsRng;
 use pqc_dilithium_edit as pqc_dilithium;
+use thiserror::Error;
 
-use crate::{bundles::{PrivateBundle, PublicBundle}, utils};
+use crate::{bundles::{BundleError, PrivateBundle, PublicBundle}, utils};
+
+#[derive(Debug, Error)]
+pub enum EnvelopeError {
+    #[error(transparent)]
+    Bundle(#[from] BundleError),
+
+    #[error("encryption failed")]
+    AesGcmEncryption(aes_gcm::Error),
+
+    #[error("decryption failed")]
+    AesGcmDecryption(aes_gcm::Error),
+}
 
 #[derive(Clone)]
 pub struct Envelope {
-    pub ciphertext: Vec<u8>,
-    pub nonce: chacha20poly1305::XNonce,
-    pub sender: PublicBundle,
-    pub msg_count: u32,
-    pub capsule: [u8; pqc_kyber::KYBER_CIPHERTEXTBYTES],
-    pub signature: (ed25519_dalek::Signature, [u8; pqc_dilithium::SIGNBYTES]),
+    ciphertext: Vec<u8>,
+    nonce: chacha20poly1305::XNonce,
+    sender: PublicBundle,
+    msg_count: u32,
+    capsule: [u8; pqc_kyber::KYBER_CIPHERTEXTBYTES],
+    signature: (ed25519_dalek::Signature, [u8; pqc_dilithium::SIGNBYTES]),
 }
 
 impl Envelope {
-    pub fn encrypt(plaintext: &[u8], msg_count: u32, sender: PrivateBundle, recipient: PublicBundle) -> Result<Self, &'static str> {
+    pub fn encrypt(plaintext: &[u8], msg_count: u32, sender: PrivateBundle, recipient: PublicBundle) -> Result<Self, EnvelopeError> {
         let (capsule, shared) = sender.shared(&recipient)?;
         let cipher = XChaCha20Poly1305::new(&utils::derive(&shared, &Self::info(msg_count)).into());
 
         let nonce = XChaCha20Poly1305::generate_nonce(&mut OsRng);
-        let ciphertext = cipher.encrypt(&nonce, plaintext).map_err(|_| "Encryption failure")?;
+        let ciphertext = cipher.encrypt(&nonce, plaintext).map_err(EnvelopeError::AesGcmEncryption)?;
         
         let signature = sender.sign(Self::static_bytes(&ciphertext, &nonce, &sender.public(), &msg_count, &capsule));
 
         Ok(Self { ciphertext, nonce, sender: sender.public(), msg_count, signature, capsule })
     }
 
-    pub fn decrypt(&self, recipient: PrivateBundle) -> Result<Vec<u8>, &'static str> {
+    pub fn decrypt(&self, recipient: PrivateBundle) -> Result<Vec<u8>, EnvelopeError> {
         self.sender.verify(self.signature, self.as_bytes())?;
 
         let cipher = XChaCha20Poly1305::new(&utils::derive(
@@ -35,7 +48,7 @@ impl Envelope {
             &Self::info(self.msg_count),
         ).into());
 
-        let plaintext = cipher.decrypt(&self.nonce, self.ciphertext.as_ref()).map_err(|_| "Decryption failure")?;
+        let plaintext = cipher.decrypt(&self.nonce, self.ciphertext.as_ref()).map_err(EnvelopeError::AesGcmDecryption)?;
 
         Ok(plaintext)
     }
@@ -46,7 +59,7 @@ impl Envelope {
         let mut buf = Vec::new();
         buf.extend_from_slice(ciphertext);
         buf.extend_from_slice(nonce);
-        buf.extend_from_slice(&sender.as_bytes());
+        buf.extend_from_slice(&sender.to_bytes());
         buf.extend_from_slice(&msg_count.to_be_bytes());
         buf.extend_from_slice(capsule);
         buf

@@ -1,23 +1,24 @@
-// use tokio::sync::mpsc;
-// use bytes::{Bytes};
-
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
-pub struct PeerId(pub String);
+use crate::net::types::NetIdentity;
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+pub struct PeerId(pub [u8; 32]);
 impl PeerId {
     pub fn new(id: &str) -> Self {
-        PeerId(id.into())
+        Self(*blake3::hash(id.as_bytes()).as_bytes())
     }
 }
 
-// pub struct Peer {
-//     pub id: PeerId,
-//     pub address: String,
-// }
+#[derive(Clone)]
+pub struct Peer {
+    pub id: PeerId,
+    pub identity: NetIdentity,
+    pub address: String,
+}
 
-// impl Peer {
-//     pub fn new(id: PeerId, address: String) -> Self {
-//         Peer { id, address }
-//     }
-// }
+impl Peer {
+    pub fn new(identity: NetIdentity, address: String) -> Self {
+        Self { id: identity.peer_id(), identity, address }
+    }
+}

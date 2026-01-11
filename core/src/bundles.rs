@@ -1,10 +1,27 @@
+use bytes::{BufMut, Bytes, BytesMut};
 use rand::{SeedableRng, rngs::OsRng};
 use rand_chacha::{ChaCha20Rng};
 use ed25519_dalek::{Signer, Verifier};
 use pqc_kyber;
 use pqc_dilithium_edit as pqc_dilithium;
+use thiserror::Error;
 
 use crate::utils;
+
+#[derive(Debug, Error)]
+pub enum BundleError {
+    #[error(transparent)]
+    Kyber(#[from] pqc_kyber::KyberError),
+
+    #[error(transparent)]
+    Ed25519(#[from] ed25519_dalek::ed25519::Error),
+
+    #[error("Dilithium error")]
+    DilithiumError,
+
+    #[error("invalid shared key")]
+    InvalidSharedKey,
+}
 
 #[derive(Clone)]
 pub struct PrivateBundle {
@@ -61,29 +78,26 @@ impl PrivateBundle {
     pub fn public(&self) -> PublicBundle {
         PublicBundle::new(&self.x_pk, &self.ed_pk, &self.kb_pk, &self.dl_pk)
     }
-    pub fn shared(&self, other: &PublicBundle) -> Result<([u8; pqc_kyber::KYBER_CIPHERTEXTBYTES], Vec<u8>), &'static str> {
+    pub fn shared(&self, other: &PublicBundle) -> Result<([u8; pqc_kyber::KYBER_CIPHERTEXTBYTES], Vec<u8>), BundleError> {
         let (ct, kb_shared) = self.encapsulate(other)?;
         Ok((ct, [self.x_shared(other)?, kb_shared].concat()))
     }
-    pub fn shared_from_ct(&self, other: &PublicBundle, ct: &[u8; pqc_kyber::KYBER_CIPHERTEXTBYTES]) -> Result<Vec<u8>, &'static str> {
+    pub fn shared_from_ct(&self, other: &PublicBundle, ct: &[u8; pqc_kyber::KYBER_CIPHERTEXTBYTES]) -> Result<Vec<u8>, BundleError> {
         Ok([self.x_shared(other)?, self.decapsulate(ct)?].concat())
     }
 
-    pub fn x_shared(&self, other: &PublicBundle) -> Result<[u8; 32], &'static str> {
+    pub fn x_shared(&self, other: &PublicBundle) -> Result<[u8; 32], BundleError> {
         let x_shared = self.x_sk.diffie_hellman(&other.x_pk).to_bytes();
         if x_shared == [0u8; 32] {
-            return Err("Invalid shared key");
+            return Err(BundleError::InvalidSharedKey);
         }
         Ok(x_shared)
     }
-    pub fn encapsulate(&self, other: &PublicBundle) -> Result<([u8; pqc_kyber::KYBER_CIPHERTEXTBYTES], pqc_kyber::SharedSecret), &'static str> {
-        pqc_kyber::encapsulate(&other.kb_pk, &mut OsRng).map_err(|_| "Encapsulation failed")
+    pub fn encapsulate(&self, other: &PublicBundle) -> Result<([u8; pqc_kyber::KYBER_CIPHERTEXTBYTES], pqc_kyber::SharedSecret), BundleError> {
+        Ok(pqc_kyber::encapsulate(&other.kb_pk, &mut OsRng)?)
     }
-    pub fn encapsulate_from_seed(&self, other: &PublicBundle, seed: [u8; 32]) -> Result<([u8; pqc_kyber::KYBER_CIPHERTEXTBYTES], pqc_kyber::SharedSecret), &'static str> {
-        pqc_kyber::encapsulate(&other.kb_pk, &mut ChaCha20Rng::from_seed(seed)).map_err(|_| "Encapsulation failed")
-    }
-    pub fn decapsulate(&self, ct: &[u8; pqc_kyber::KYBER_CIPHERTEXTBYTES]) -> Result<pqc_kyber::SharedSecret, &'static str> {
-        pqc_kyber::decapsulate(ct, &self.kb_sk).map_err(|_| "Decapsulation failed")
+    pub fn decapsulate(&self, ct: &[u8; pqc_kyber::KYBER_CIPHERTEXTBYTES]) -> Result<pqc_kyber::SharedSecret, BundleError> {
+        Ok(pqc_kyber::decapsulate(ct, &self.kb_sk)?)
     }
     pub fn sign(&self, data: Vec<u8>) -> (ed25519_dalek::Signature, [u8; pqc_dilithium::SIGNBYTES]) {
         let hash = utils::hash(&data);
@@ -107,19 +121,19 @@ impl PublicBundle {
     pub fn new(x_pk: &x25519_dalek::PublicKey, ed_pk: &ed25519_dalek::VerifyingKey, kb_pk: &pqc_kyber::PublicKey, dl_pk: &[u8; pqc_dilithium::PUBLICKEYBYTES]) -> Self {
         Self { x_pk: *x_pk, ed_pk: *ed_pk, kb_pk: *kb_pk, dl_pk: *dl_pk }
     }
-    pub fn as_bytes(&self) -> Vec<u8> {
-        let mut buf = Vec::new();
-        buf.extend_from_slice(self.x_pk.as_bytes());
+    pub fn to_bytes(&self) -> Bytes {
+        let mut buf = BytesMut::new();
+        buf.put_slice(self.x_pk.as_bytes());
         buf.extend_from_slice(self.ed_pk.as_bytes());
         buf.extend_from_slice(&self.kb_pk);
         buf.extend_from_slice(&self.dl_pk);
-        buf
+        buf.freeze()
     }
-    pub fn verify(&self, signature: (ed25519_dalek::Signature, [u8; pqc_dilithium::SIGNBYTES]), data: Vec<u8>) -> Result<(), &'static str> {
+    pub fn verify(&self, signature: (ed25519_dalek::Signature, [u8; pqc_dilithium::SIGNBYTES]), data: Vec<u8>) -> Result<(), BundleError> {
         let hash = utils::hash(&data);
 
-        self.ed_pk.verify(&hash, &signature.0).map_err(|_| "Invalid signature").map_err(|_| "Ed25519 verifying failed")?;
-        pqc_dilithium::verify(&signature.1, &hash, &self.dl_pk).map_err(|_| "Dilithium verifying failed")?;
+        self.ed_pk.verify(&hash, &signature.0)?;
+        pqc_dilithium::verify(&signature.1, &hash, &self.dl_pk).map_err(|_| BundleError::DilithiumError)?;
         
         Ok(())
     }
@@ -164,7 +178,7 @@ mod tests {
         let alice1 = PrivateBundle::new(&x_sk, &ed_sk, kb_seed, dl_seed);
         let alice2 = PrivateBundle::new(&x_sk, &ed_sk, kb_seed, dl_seed);
         
-        assert_eq!(alice1.public().as_bytes(), alice2.public().as_bytes(), "Equivalent bundles must match");
+        assert_eq!(alice1.public().to_bytes(), alice2.public().to_bytes(), "Equivalent bundles must match");
     }
 
     #[test]

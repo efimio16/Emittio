@@ -1,7 +1,7 @@
-use crate::{bundles::{PrivateBundle, PublicBundle}, envelope::Envelope};
+use crate::{bundles::{PrivateBundle, PublicBundle}, envelope::{Envelope, EnvelopeError}};
 
 pub struct Inbox {
-    pub message_counter: u32,
+    message_counter: u32,
     pub sender: PrivateBundle,
 }
 
@@ -13,7 +13,7 @@ impl Inbox {
         }
     }
 
-    pub fn new_envelope(&mut self, recipient: PublicBundle, plaintext: &[u8]) -> Result<Envelope, &'static str> {
+    pub fn new_envelope(&mut self, recipient: PublicBundle, plaintext: &[u8]) -> Result<Envelope, EnvelopeError> {
         Envelope::encrypt(plaintext, self.message_counter, self.sender.clone(), recipient)
     }
 }

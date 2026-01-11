@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 use tokio::sync::{mpsc, oneshot};
 use thiserror::Error;
+use tokio_util::sync::CancellationToken;
 
-use crate::{channels::ChannelError, message::{IncomingMessage, MsgId, OutgoingMessage, Payload, Reply}, transport::TransportDispatcher};
+use crate::{channels::ChannelError, message::{IncomingMessage, MsgId, OutgoingMessage, Payload, Reply}, service::Service, transport::TransportDispatcher};
 
 const MAX_PENDING: usize = 1024;
 
@@ -22,25 +23,16 @@ pub struct ClientCmd {
 
 pub struct ClientService {
     cmd_rx: mpsc::Receiver<ClientCmd>,
-    chans: TransportDispatcher,
+    transport_dispatcher: TransportDispatcher,
     pending: HashMap<MsgId, oneshot::Sender<Reply>>,
 }
 
 impl ClientService {
-    pub fn new(cmd_rx: mpsc::Receiver<ClientCmd>, chans: TransportDispatcher) -> Self {
+    pub fn new(cmd_rx: mpsc::Receiver<ClientCmd>, transport_dispatcher: TransportDispatcher) -> Self {
         Self {
             cmd_rx,
-            chans,
+            transport_dispatcher,
             pending: HashMap::with_capacity(MAX_PENDING),
-        }
-    }
-
-    pub async fn run(&mut self) -> Result<(), ClientServiceError> {
-        loop {
-            tokio::select! {
-                Some(cmd) = self.cmd_rx.recv() => { self.handle_cmd(cmd).await?; }
-                Some(msg) = self.chans.recv() => { self.handle_recv(msg)?; }
-            }
         }
     }
 
@@ -50,7 +42,7 @@ impl ClientService {
         }
 
         self.pending.insert(cmd.msg.id.clone(), cmd.reply_tx);
-        self.chans.send(cmd.msg).await?;
+        self.transport_dispatcher.send(cmd.msg).await?;
         Ok(())
     }
 
@@ -61,5 +53,21 @@ impl ClientService {
             }
         }
         Ok(())
+    }
+}
+
+impl Service for ClientService {
+    type Error = ClientServiceError;
+    
+    async fn run(mut self, token: CancellationToken) -> Result<(), ClientServiceError> {
+        println!("Running client service");
+        
+        loop {
+            tokio::select! {
+                _ = token.cancelled() => { return Ok(()); }
+                Some(cmd) = self.cmd_rx.recv() => { self.handle_cmd(cmd).await?; }
+                Some(msg) = self.transport_dispatcher.recv() => { self.handle_recv(msg)?; }
+            }
+        }
     }
 }

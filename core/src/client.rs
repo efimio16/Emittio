@@ -28,24 +28,27 @@ pub struct Client {
 
 impl Client {
     pub fn new() -> (Self, ClientService, TransportHandler) {
-        let (tr_dispatcher, tr_handler) = channels::new(128);
+        let (transport_dispatcher, transport_handler) = channels::new(128);
         let (cmd_tx, cmd_rx) = mpsc::channel(CHAN_SIZE);
 
-        (Self { cmd_tx }, ClientService::new(cmd_rx, tr_dispatcher), tr_handler)
+        (Self { cmd_tx }, ClientService::new(cmd_rx, transport_dispatcher), transport_handler)
     }
 
-    pub async fn get_tags(&mut self, peer_id: &PeerId) -> Result<Reply, ClientError> {
-        self.send(peer_id, Payload::Query(Query::GetTags)).await
+    pub async fn get_tags(&mut self, peer_id: &PeerId) -> Result<Vec<Tag>, ClientError> {
+        match self.send(peer_id, Payload::Query(Query::GetTags)).await? {
+            Reply::ReturnTags(tags) => Ok(tags),
+            _ => Err(ClientError::InvalidReply),
+        }
     }
 
     pub async fn publish_tag(&mut self, peer_id: &PeerId, tag: Tag) -> Result<(), ClientError> {
-        if let Reply::RequirePow(pow) = self.send(peer_id, Payload::Query(Query::GetPow(Action::PublishTag))).await? {
-            let nonce = pow.solve();
-            self.send(peer_id, Payload::Query(Query::PublishTag { tag, pow, nonce })).await?.as_ok()?;
-            Ok(())
-        } else {
-            Err(ClientError::InvalidReply)
-        }
+        let Reply::RequirePow(pow) = self.send(peer_id, Payload::Query(Query::GetPow(Action::PublishTag))).await? else {
+            return Err(ClientError::InvalidReply);
+        };
+
+        let nonce = pow.solve();
+        self.send(peer_id, Payload::Query(Query::PublishTag { tag, pow, nonce })).await?.as_ok()?;
+        Ok(())
     }
 
     pub async fn send(

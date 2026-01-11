@@ -40,12 +40,26 @@ In other words, how it works.
 1. [x] Alice-Bob cryptography system prototype in Rust
 2. [x] `Client`, `Node` and `MockTransport` abstractions
 3. [x] Tags, their storage and lookup
-4. [ ] DHT
-5. [ ] QUIC and/or TCP transports
-6. [ ] Mixnet (onion-like routing & dummy requests)
-7. [ ] Quorums
-8. [ ] UX & UI prototyping
-9. [ ] Svelte web client
+4. [x] Application-level transport encryption
+5. [x] `PeerTable` service
+6. [ ] DHT
+7. [ ] QUIC and/or TCP transports
+8. [ ] Mixnet (onion-like routing & dummy requests)
+9. [ ] Quorums
+10. [ ] UX & UI prototyping
+11. [ ] Svelte web client
+
+## 🤝 Join the Project
+
+Emittio is currently in the R&D stage, and we are starting to form a small team.
+If you are interested in:
+
+- privacy-preserving systems
+- decentralized networks
+- cryptography
+- and, in general, creating something new
+
+you can contact us at [emittio@proton.me](mailto:emittio@proton.me).
 
 ## 🟢 Status
 
@@ -67,5 +81,3 @@ Currently working on the MVP; looking for feedback on architecture.
 - ETH: `0xB9be3CbB7Dc9f9C104640899AeF4A1b4147f9e21`
 - SOL: `6evKWq8jEVJS1GiaNp7XhKQqZQg4jzacV96KbGLoHLwV`
 - XMR: `87T3MAroNFfBKE7hvUphVFjfYSgaB6a7qVpvrs9hDAcMMJ413bEeyLAe77j7NnfYeF22PPVbwues9C4Ce2z4N7zv3rXE1Do`
-
-> ⚠️ Project in early R&D stage. Looking for early feedback & sponsors. Contributors welcome after MVP.

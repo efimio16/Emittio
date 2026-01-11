@@ -66,9 +66,6 @@ pub enum Reply {
 }
 
 impl Reply {
-    // pub fn is_err(&self) -> bool {
-    //     matches!(self, Self::Err(_))
-    // }
     pub fn as_ok(self) -> Result<Self, ReplyErr> {
         match self {
             Self::Err(msg) => Err(ReplyErr(msg.clone())),

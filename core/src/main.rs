@@ -13,56 +13,96 @@ mod client_service;
 mod tag;
 mod tag_service;
 mod channels;
+mod peer_table;
+mod net;
+mod service;
 
-use std::time::Instant;
-use tokio;
+use std::time::Duration;
+use tokio::time::sleep;
 
-use crate::{client::Client, message::Reply, node::Node, peer::PeerId, session::Session, tag::{TagManager, TagPayload}, tag_service::TagService, transport::MockTransport};
+use crate::{client::Client, net::client::NetClient, node::Node, peer::PeerId, peer_table::PeerTable, service::ServiceManager, session::Session, tag::{TagManager, TagPayload}, tag_service::TagService, transport::MockTransport};
 
+const VERSION: u8 = 1;
 
-const VERSION: usize = 1;
+const DEFAULT_INBOX: u32 = 0;
+
 #[tokio::main]
 async fn main() {
-    let start = Instant::now();
+    let (tag_service, tag_dispatcher) = TagService::new("tags.bin".into());
+    let (peer_service, peer_dispatcher) = PeerTable::new();
 
-    let (mut tag_service, tag_dispatcher) = TagService::new("tags.bin".into());
+    let mut transport = MockTransport::new(peer_dispatcher.clone());
 
-    let transport = MockTransport::new();
+    let (mut client, client_service, transport_handler) = Client::new();
+    transport.add_peer(PeerId::new("client"), NetClient::Ephemeral, transport_handler);
 
-    let (mut client, mut client_service, t_params) = Client::new();
-    transport.add_peer(PeerId::new("client"), t_params);
+    let (node, node_client, node_peer, transport_handler) = Node::new(tag_dispatcher);
+    
+    transport.add_peer(node_peer.id, node_client, transport_handler);
 
-    let node_id = PeerId::new("node");
-    let (mut node, t_params) = Node::new(tag_dispatcher);
-    transport.add_peer(node_id.clone(), t_params);
-
-    tokio::spawn(async move { client_service.run().await });
-    tokio::spawn(async move { node.run().await });
-    tokio::spawn(async move { /*tag_service.load().await.expect("load tag service failed");*/ tag_service.run().await });
+    peer_dispatcher.add_peer(node_peer.clone()).await.expect("add peer failed");
 
     let mut tag_manager = TagManager::new();
-    if let Reply::ReturnTags(tags) = client.get_tags(&node_id).await.expect("get tags failed") {
+
+    let mut service_manager = ServiceManager::new();
+
+    service_manager.spawn(client_service);
+    service_manager.spawn(node);
+    service_manager.spawn(tag_service);
+    service_manager.spawn(peer_service);
+    service_manager.spawn(transport);
+
+    let main = async {
+
+        let tags = client.get_tags(&node_peer.id).await.expect("get tags failed");
+
         tag_manager.load_tags(tags).expect("load tags failed");
-    }
-    
-    let owned_tag = tag_manager.new_tag(TagPayload { data: b"Hello!".into() }).expect("failed create tag");
+        
+        let owned_tag = tag_manager.new_tag(TagPayload { data: b"Hello!".into() }).expect("failed create tag");
 
-    client.publish_tag(&node_id, owned_tag.tag).await.expect("Failed to publish tag");
+        client.publish_tag(&node_peer.id, owned_tag.tag.clone()).await.expect("Failed to publish tag");
 
-    let alice = Session::new();
-    let bob = Session::new();
-    println!("Sessions initialized");
+        println!("Waiting 5 seconds...");
+        sleep(Duration::from_secs(5)).await;
 
-    let mut alice_inbox = alice.inbox(0);
-    let bob_inbox = bob.inbox(0);
-    println!("Inboxes initialized");
+        assert_eq!(client.get_tags(&node_peer.id).await.expect("get tags failed")[0].hash, owned_tag.tag.hash);
 
-    let envelope = alice_inbox.new_envelope(bob_inbox.sender.public(), b"Hello, Bob! How are you?").expect("Failed to create envelope");
-    println!("Encrypted: {:x?}", envelope.as_bytes());
+        // Alice-Bob example
+        let alice = Session::new();
+        let bob = Session::new();
+        println!("Sessions initialized");
 
-    let plaintext = envelope.decrypt(bob_inbox.sender).unwrap();
-    assert_eq!(&plaintext, b"Hello, Bob! How are you?");
-    println!("Decrypted: {}", str::from_utf8(&plaintext).unwrap());
-    
-    println!("⏱ Completed in: {:?}", start.elapsed());
+        let mut alice_inbox = alice.inbox(DEFAULT_INBOX);
+        let bob_inbox = bob.inbox(DEFAULT_INBOX);
+        println!("Inboxes initialized");
+
+        let envelope = alice_inbox.new_envelope(bob_inbox.sender.public(), b"Hello, Bob! How are you?").expect("Failed to create envelope");
+        println!("Encrypted: {:0x?}", envelope.as_bytes());
+
+        let plaintext = envelope.decrypt(bob_inbox.sender).unwrap();
+        assert_eq!(&plaintext, b"Hello, Bob! How are you?");
+        println!("Decrypted: {}", str::from_utf8(&plaintext).unwrap());
+    };
+
+    let (mut handle, token) = service_manager.run();
+
+    let ctrl_c = tokio::spawn(async move { tokio::signal::ctrl_c().await.expect("failed to listen to ctrl c event") });
+
+    tokio::select! {
+        _ = ctrl_c => {
+            token.cancel();
+            let _ = handle.await;
+        }
+        res = &mut handle => {
+            match res {
+                Ok(Ok(())) => { println!("service manager exited unexpectedly"); },
+                Ok(Err(err)) => { panic!("{}", err); },
+                Err(join_err) => { panic!("{}", join_err); }
+            }
+        }
+        _ = main => {
+            token.cancel();
+            let _ = handle.await;
+        }
+    };
 }
