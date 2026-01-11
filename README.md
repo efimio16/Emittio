@@ -15,6 +15,26 @@ We're building a mail system that is:
 - 👤 **Anonymous** — no IDs or accounts
 - ⚡️ **Efficient** — fast delivery
 
+## Getting started
+
+## Requirements
+
+- Rust (stable) — https://rustup.rs
+
+## Build
+
+```bash
+cd core
+cargo build --release
+```
+
+## Run
+
+```bash
+cd core
+cargo run --release
+```
+
 ## 🏠 Architecture
 
 In other words, how it works.
