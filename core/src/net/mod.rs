@@ -4,3 +4,4 @@ pub mod packet;
 pub mod types;
 pub mod client;
 pub mod session_store;
+pub mod service;
