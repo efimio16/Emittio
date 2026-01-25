@@ -1,7 +1,7 @@
+use rand::{RngCore, rngs::OsRng};
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
-use crate::{peer::PeerId, pow::Pow, tag::Tag};
+use crate::{payload::{Payload, Query, Reply}, peer::PeerId};
 
 pub type MsgId = u64;
 
@@ -17,7 +17,7 @@ impl IncomingMessage {
         Self { from, payload: msg.payload, id: msg.id }
     }
     pub fn reply(&self, reply: Reply) -> OutgoingMessage {
-        OutgoingMessage { to: self.from.clone(), payload: Payload::Reply(reply), id: self.id }
+        OutgoingMessage { to: self.from, payload: Payload::Reply(reply), id: self.id }
     }
 }
 
@@ -30,58 +30,26 @@ pub struct OutgoingMessage {
 
 impl OutgoingMessage {
     pub fn new(to: &PeerId, payload: Payload) -> Self {
-        Self { to: to.clone(), payload, id: rand::random() }
+        Self { to: to.clone(), payload, id: OsRng.next_u64() }
+    }
+    pub fn query(to: &PeerId, q: impl Into<Query>) -> Self {
+        Self::new(to, Payload::Query(q.into()))
+    }
+    pub fn reply(to: &PeerId, r: impl Into<Reply>) -> Self {
+        Self::new(to, Payload::Reply(r.into()))
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub enum Payload {
-    Query(Query),
-    Reply(Reply),
+pub struct OutgoingMessageBuilder {
+    to: PeerId,
+    id: MsgId,
 }
 
-#[derive(Serialize, Deserialize)]
-pub enum Query {
-    GetTags,
-    PublishTag {
-        tag: Tag,
-        pow: Pow,
-        nonce: u64,
-    },
-    GetPow(Action),
-}
-
-
-#[derive(Debug, Error)]
-#[error("Reply error: {0}")]
-pub struct ReplyErr(String);
-
-#[derive(Serialize, Deserialize)]
-pub enum Reply {
-    Empty,
-    Ok,
-    Err(String),
-    RequirePow(Pow),
-    ReturnTags(Vec<Tag>),
-}
-
-impl Reply {
-    pub fn as_ok(self) -> Result<Self, ReplyErr> {
-        match self {
-            Self::Err(msg) => Err(ReplyErr(msg.clone())),
-            _ => Ok(self),
-        }
+impl OutgoingMessageBuilder {
+    pub fn new(incoming: &IncomingMessage) -> Self {
+        Self { to: incoming.from, id: incoming.id }
     }
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy)]
-#[repr(u16)]
-pub enum Action {
-    PublishTag = 1,
-}
-
-impl Action {
-    pub fn value(&self) -> u16 {
-        *self as u16
+    pub fn reply(self, reply: Reply) -> OutgoingMessage {
+        OutgoingMessage { to: self.to, payload: Payload::Reply(reply), id: self.id }
     }
 }

@@ -1,9 +1,8 @@
-use rand::{RngCore, rngs::OsRng};
 use serde::{Deserialize, Serialize};
 use sha2::{Sha256, Digest};
 use blake3;
 
-use crate::{message::Action, utils::get_timestamp};
+use crate::{payload::Action, utils::{get_timestamp, random_bytes}};
 
 fn pow_input(secret: &[u8; 32], timestamp: u64, action: Action, random: &[u8; 16]) -> [u8; 32] {
     let mut hasher = blake3::Hasher::new();
@@ -39,9 +38,7 @@ impl Pow {
         }
 
         let timestamp = get_timestamp();
-
-        let mut random =  [0u8; 16];
-        OsRng.fill_bytes(&mut random);
+        let random = random_bytes();
 
         Pow {
             input: pow_input(secret, timestamp, action, &random),
@@ -89,15 +86,13 @@ impl Pow {
 
 #[cfg(test)]
 mod tests {
-    use crate::{message::Action, pow::Pow, utils::{deserialize, serialize}};
+    use crate::{payload::Action, pow::Pow, utils::{deserialize, random_bytes, serialize}};
 
-    use rand::{RngCore, rngs::OsRng};
     use std::time::Instant;
 
     #[test]
     fn pow_test() {
-        let mut secret = [0u8; 32];
-        OsRng.fill_bytes(&mut secret);
+        let secret = random_bytes();
 
         let action = Action::PublishTag;
         let difficulty = 16; // 17-450ms on Mac M3

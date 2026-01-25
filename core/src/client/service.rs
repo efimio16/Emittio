@@ -1,36 +1,26 @@
 use std::collections::HashMap;
 use tokio::sync::{mpsc, oneshot};
-use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 
-use crate::{channels::ChannelError, message::{IncomingMessage, MsgId, OutgoingMessage, Payload, Reply}, service::Service, transport::TransportDispatcher};
+use crate::{client::ClientServiceError, message::{IncomingMessage, MsgId, OutgoingMessage}, payload::{Payload, Reply}, service::Service, transport::TransportDispatcher, utils::ChannelError};
 
 const MAX_PENDING: usize = 1024;
 
-#[derive(Debug, Error)]
-pub enum ClientServiceError {
-    #[error(transparent)]
-    Channel(#[from] ChannelError),
-
-    #[error("Too many pending")]
-    TooManyPending,
-}
-
 pub struct ClientCmd {
-    pub msg: OutgoingMessage,
-    pub reply_tx: oneshot::Sender<Reply>,
+    pub(super) msg: OutgoingMessage,
+    pub(super) reply_tx: oneshot::Sender<Reply>,
 }
 
 pub struct ClientService {
-    cmd_rx: mpsc::Receiver<ClientCmd>,
+    rx: mpsc::Receiver<ClientCmd>,
     transport_dispatcher: TransportDispatcher,
     pending: HashMap<MsgId, oneshot::Sender<Reply>>,
 }
 
 impl ClientService {
-    pub fn new(cmd_rx: mpsc::Receiver<ClientCmd>, transport_dispatcher: TransportDispatcher) -> Self {
+    pub(super) fn new(cmd_rx: mpsc::Receiver<ClientCmd>, transport_dispatcher: TransportDispatcher) -> Self {
         Self {
-            cmd_rx,
+            rx: cmd_rx,
             transport_dispatcher,
             pending: HashMap::with_capacity(MAX_PENDING),
         }
@@ -65,7 +55,7 @@ impl Service for ClientService {
         loop {
             tokio::select! {
                 _ = token.cancelled() => { return Ok(()); }
-                Some(cmd) = self.cmd_rx.recv() => { self.handle_cmd(cmd).await?; }
+                Some(cmd) = self.rx.recv() => { self.handle_cmd(cmd).await?; }
                 Some(msg) = self.transport_dispatcher.recv() => { self.handle_recv(msg)?; }
             }
         }

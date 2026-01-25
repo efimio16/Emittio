@@ -1,7 +1,7 @@
 use aes_gcm::{Aes256Gcm, AesGcm, KeyInit, aead::{Aead, Payload}, aes::Aes256};
 use chacha20poly1305::consts::U12;
 
-use crate::{VERSION, net::{error::{CryptoError, NetError}, packet::{ConnId, Message}}};
+use crate::{VERSION, net::{CryptoError, NetError, ConnId, Message}};
 
 const WINDOW: usize = 32;
 const NONCE_PREFIX: [u8; 4] = [0x12,0x34,0x56,0x78];

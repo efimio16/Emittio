@@ -9,79 +9,95 @@ mod client;
 mod message;
 mod pow;
 mod node;
-mod client_service;
 mod tag;
-mod tag_service;
-mod channels;
-mod peer_table;
 mod net;
 mod service;
+mod payload;
+mod dht;
+mod id;
 
 use std::time::Duration;
+use rand::random;
 use tokio::time::sleep;
 
-use crate::{client::Client, net::client::NetClient, node::Node, peer::PeerId, peer_table::PeerTable, service::ServiceManager, session::Session, tag::{TagManager, TagPayload}, tag_service::TagService, transport::MockTransport};
+use crate::{client::Client, dht::DhtStorage, envelope::Envelope, node::NodeService, peer::PeerTable, service::ServiceManager, session::Session, tag::{TagManager, TagPayload, TagService}, transport::{MockTransport, TransportHandler, TransportParticipant}};
 
 const VERSION: u8 = 1;
-
 const DEFAULT_INBOX: u32 = 0;
 
 #[tokio::main]
 async fn main() {
-    let (tag_service, tag_dispatcher) = TagService::new("tags.bin".into());
+    let (tag_service, tag_dispatcher) = TagService::create("tags.bin".into()).await.expect("tag service init failed");
     let (peer_service, peer_dispatcher) = PeerTable::new();
 
     let mut transport = MockTransport::new(peer_dispatcher.clone());
 
-    let (mut client, client_service, transport_handler) = Client::new();
-    transport.add_peer(PeerId::new("client"), NetClient::Ephemeral, transport_handler);
+    let (transport_handler, transport_dispatcher) = TransportHandler::new();
+    let (mut client, client_service) = Client::new(transport_dispatcher);
+    transport.add_peer(&client, transport_handler).await.expect("failed to add peer");
 
-    let (node, node_client, node_peer, transport_handler) = Node::new(tag_dispatcher);
+    let (dht_storage_service, dht_storage_dispatcher) = DhtStorage::create("dht.bin".into()).await.expect("dht storage init failed");
+
+    let (transport_handler, transport_dispatcher) = TransportHandler::new();
+
+    let (node_dispatcher, node_service, dht_routing_service) = NodeService::new(transport_dispatcher, tag_dispatcher, random(), dht_storage_dispatcher, peer_dispatcher.clone());
+    transport.add_peer(&node_dispatcher, transport_handler).await.expect("failed to add peer");
+
+    let node_id = node_dispatcher.net_client().identity().expect("node should have a static identity").peer_id();
     
-    transport.add_peer(node_peer.id, node_client, transport_handler);
-
-    peer_dispatcher.add_peer(node_peer.clone()).await.expect("add peer failed");
-
     let mut tag_manager = TagManager::new();
 
     let mut service_manager = ServiceManager::new();
 
     service_manager.spawn(client_service);
-    service_manager.spawn(node);
+    service_manager.spawn(node_service);
     service_manager.spawn(tag_service);
     service_manager.spawn(peer_service);
     service_manager.spawn(transport);
+    service_manager.spawn(dht_storage_service);
+    service_manager.spawn(dht_routing_service);
 
     let main = async {
 
-        let tags = client.get_tags(&node_peer.id).await.expect("get tags failed");
+        let tags = client.get_tags(&node_id).await.expect("get tags failed");
 
         tag_manager.load_tags(tags).expect("load tags failed");
         
         let owned_tag = tag_manager.new_tag(TagPayload { data: b"Hello!".into() }).expect("failed create tag");
 
-        client.publish_tag(&node_peer.id, owned_tag.tag.clone()).await.expect("Failed to publish tag");
+        client.publish_tag(&node_id, owned_tag.tag.clone()).await.expect("failed to publish tag");
 
         println!("Waiting 5 seconds...");
         sleep(Duration::from_secs(5)).await;
 
-        assert_eq!(client.get_tags(&node_peer.id).await.expect("get tags failed")[0].hash, owned_tag.tag.hash);
+        assert_eq!(client.get_tags(&node_id).await.expect("get tags failed")[0].hash, owned_tag.tag.hash);
 
         // Alice-Bob example
         let alice = Session::new();
         let bob = Session::new();
         println!("Sessions initialized");
 
-        let mut alice_inbox = alice.inbox(DEFAULT_INBOX);
+        let alice_inbox = alice.inbox(DEFAULT_INBOX);
         let bob_inbox = bob.inbox(DEFAULT_INBOX);
         println!("Inboxes initialized");
 
-        let envelope = alice_inbox.new_envelope(bob_inbox.sender.public(), b"Hello, Bob! How are you?").expect("Failed to create envelope");
-        println!("Encrypted: {:0x?}", envelope.as_bytes());
+        let envelope = Envelope::encrypt(
+            b"Hello, Bob! How are you?",
+            &alice_inbox.sender,
+            &bob_inbox.sender.public(),
+        ).expect("failed to create envelope");
 
-        let plaintext = envelope.decrypt(bob_inbox.sender).unwrap();
+        let envelope_cid = client.dht_put(&node_id, &envelope).await.expect("dht put failed");
+        println!("Envelope saved");
+
+        println!("Waiting 1 second...");
+        sleep(Duration::from_secs(1)).await;
+
+        let envelope: Envelope = client.dht_get(&node_id, envelope_cid).await.expect("dht get failed").expect("content not found");
+
+        let plaintext = envelope.decrypt(&bob_inbox.sender).expect("decryption failed");
         assert_eq!(&plaintext, b"Hello, Bob! How are you?");
-        println!("Decrypted: {}", str::from_utf8(&plaintext).unwrap());
+        println!("Decrypted: {}", str::from_utf8(&plaintext).expect("the slice should be UTF-8"));
     };
 
     let (mut handle, token) = service_manager.run();

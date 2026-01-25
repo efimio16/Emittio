@@ -1,42 +1,11 @@
 use std::collections::HashMap;
-use thiserror::Error;
-use tokio::sync::{mpsc, oneshot};
+
+use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-use crate::{channels::ChannelError, peer::{Peer, PeerId}, service::Service};
+use crate::{utils::ChannelError, peer::{Peer, PeerId, PeerTableCmd, PeerTableDispatcher, PeerTableError}, service::Service};
 
-#[derive(Debug, Error)]
-pub enum PeerTableError {
-    #[error(transparent)]
-    Channel(#[from] ChannelError),
-}
-
-enum PeerTableCmd {
-    GetAllIds { reply_tx: oneshot::Sender<Vec<PeerId>> },
-    GetPeer { peer_id: PeerId, reply_tx: oneshot::Sender<Option<Peer>> },
-    AddPeer { peer: Peer },
-}
-
-#[derive(Clone)]
-pub struct PeerTableDispatcher {
-    tx: mpsc::Sender<PeerTableCmd>,
-}
-
-impl PeerTableDispatcher {
-    pub async fn get_all_ids(&self) -> Result<Vec<PeerId>, ChannelError> {
-        let (tx, rx) = oneshot::channel();
-        self.tx.send(PeerTableCmd::GetAllIds { reply_tx: tx }).await.map_err(|_| ChannelError::Closed)?;
-        rx.await.map_err(|_| ChannelError::Closed)
-    }
-    pub async fn get_peer(&self, peer_id: PeerId) -> Result<Option<Peer>, ChannelError> {
-        let (tx, rx) = oneshot::channel();
-        self.tx.send(PeerTableCmd::GetPeer { peer_id, reply_tx: tx }).await.map_err(|_| ChannelError::Closed)?;
-        rx.await.map_err(|_| ChannelError::Closed)
-    }
-    pub async fn add_peer(&self, peer: Peer) -> Result<(), ChannelError> {
-        self.tx.send(PeerTableCmd::AddPeer { peer }).await.map_err(|_| ChannelError::Closed)
-    }
-}
+const CHAN_SIZE: usize = 100;
 
 pub struct PeerTable {
     rx: mpsc::Receiver<PeerTableCmd>,
@@ -45,7 +14,7 @@ pub struct PeerTable {
 }
 impl PeerTable {
     pub fn new() -> (Self, PeerTableDispatcher) {
-        let (tx, rx) = mpsc::channel(100);
+        let (tx, rx) = mpsc::channel(CHAN_SIZE);
         (Self { rx, peers: HashMap::new(), peer_ids: Vec::new() }, PeerTableDispatcher { tx })
     }
 }
@@ -75,15 +44,15 @@ impl Service for PeerTable {
 mod tests {
     use tokio_util::sync::CancellationToken;
 
-    use crate::{net::types::NetIdentity, peer::{Peer, PeerId}, peer_table::PeerTable, service::Service};
+    use crate::{net::NetIdentity, peer::{Peer, PeerTable}, service::Service};
 
     #[tokio::test]
     async fn test() {
         let (table, dispatcher) = PeerTable::new();
 
-        tokio::spawn(async move { table.run(CancellationToken::new()).await.expect("Something happened")});
+        tokio::spawn(table.run(CancellationToken::new()));
 
-        let peer_id = PeerId::new("test");
+        let peer_id = "test".into();
         let peer = Peer { id: peer_id, address: "0.0.0.0".into(), identity: NetIdentity { x_pk: [1u8; 32], kb_pk: [1u8; 800] } };
 
         dispatcher.add_peer(peer).await.expect("add peer failed");

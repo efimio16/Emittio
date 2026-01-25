@@ -1,8 +1,9 @@
 use rand::{RngCore, SeedableRng, rngs::OsRng};
 use rand_chacha::ChaCha20Rng;
 use x25519_dalek::x25519;
-use crate::{net::{error::CryptoError, packet::{Handshake, HandshakeAck}, session::NetSession, types::{KyberPublicKey, KyberSecretKey, NetIdentity}}, utils};
+use crate::{net::{CryptoError, Handshake, HandshakeAck, NetIdentity, NetSession}, utils::{self, KyberPublicKey, KyberSecretKey}};
 
+#[derive(Clone)]
 pub enum NetClient {
     Ephemeral,
     Static {
@@ -14,20 +15,17 @@ pub enum NetClient {
 }
 
 impl NetClient {
-    pub fn from_seed(seed: [u8; 32]) -> (Self, NetIdentity) {
+    pub fn from_seed(seed: [u8; 32]) -> Self {
         let x_sk = x25519_dalek::StaticSecret::random_from_rng(&mut ChaCha20Rng::from_seed(seed));
         let x_pk = x25519_dalek::PublicKey::from(&x_sk);
         let kb = pqc_kyber::keypair(&mut ChaCha20Rng::from_seed(seed)).expect("failed to generate kyber");
         
-        (Self::Static {
+        Self::Static {
             x_sk: x_sk.to_bytes(),
             x_pk: x_pk.to_bytes(),
             kb_sk: kb.secret,
             kb_pk: kb.public,
-        }, NetIdentity {
-            x_pk: x_pk.to_bytes(),
-            kb_pk: kb.public,
-        })
+        }
     }
     pub fn handshake(&self, to: NetIdentity) -> Result<([u8; 32], Handshake), CryptoError> {
         let (
@@ -61,9 +59,16 @@ impl NetClient {
         ))
     }
 
+    pub fn identity(&self) -> Option<NetIdentity> {
+        match self {
+            NetClient::Static { x_pk, kb_pk, .. } => Some(NetIdentity { x_pk: *x_pk, kb_pk: *kb_pk }),
+            NetClient::Ephemeral => None
+        }
+    }
+
     pub fn accept(&self, handshake: Handshake) -> Result<(NetSession, HandshakeAck), CryptoError> {
         let NetClient::Static { x_sk, kb_sk, .. } = self else {
-            return Err(CryptoError::CannotAcceptConn);
+            return Err(CryptoError::EphemeralClient);
         };
 
         let x_shared = x25519(*x_sk, handshake.from.x_pk);

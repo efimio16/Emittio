@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
-use crate::{net::types::{NetIdentity, KyberCiphertext}};
+use crate::{net::NetIdentity, utils::KyberCiphertext};
 
 pub type ConnId = u64;
 

@@ -5,21 +5,8 @@ use aes_gcm::{
     AeadCore, Aes256Gcm, AesGcm, aead::{self, Aead, KeyInit}, aes::Aes256
 };
 use bytes::{BufMut, Bytes, BytesMut};
-use thiserror::Error;
 
-use crate::{VERSION, utils::{self, SerdeError, deserialize, serialize}};
-
-#[derive(Debug, Error)]
-pub enum TagError {
-    #[error(transparent)]
-    Serde(#[from] SerdeError),
-
-    #[error("encryption failed")]
-    AesGcmEncryption(aes_gcm::Error),
-
-    #[error("decryption failed")]
-    AesGcmDecryption(aes_gcm::Error),
-}
+use crate::{VERSION, tag::TagError, utils::{self, deserialize, serialize}};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Tag {

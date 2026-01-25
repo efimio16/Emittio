@@ -1,12 +1,11 @@
-use bytes::{BufMut, Bytes, BytesMut};
 use rand::{SeedableRng, rngs::OsRng};
 use rand_chacha::{ChaCha20Rng};
-use ed25519_dalek::{Signer, Verifier};
-use pqc_kyber;
-use pqc_dilithium_edit as pqc_dilithium;
+use serde::{Deserialize, Serialize};
+use serde_big_array::BigArray;
 use thiserror::Error;
+use x25519_dalek::x25519;
 
-use crate::utils;
+use crate::utils::{self, KyberCiphertext, KyberPublicKey, KyberSecretKey, random_bytes};
 
 #[derive(Debug, Error)]
 pub enum BundleError {
@@ -25,139 +24,78 @@ pub enum BundleError {
 
 #[derive(Clone)]
 pub struct PrivateBundle {
-    pub x_sk: x25519_dalek::StaticSecret,
-    pub x_pk: x25519_dalek::PublicKey,
-    pub ed_sk: ed25519_dalek::SigningKey,
-    pub ed_pk: ed25519_dalek::VerifyingKey,
-    pub kb_sk: pqc_kyber::SecretKey,
-    pub kb_pk: pqc_kyber::PublicKey,
-    pub dl_sk: [u8; pqc_dilithium::SECRETKEYBYTES],
-    pub dl_pk: [u8; pqc_dilithium::PUBLICKEYBYTES],
+    seed: [u8; 32],
+    x_sk: [u8; 32],
+    x_pk: [u8; 32],
+    kb_sk: KyberSecretKey,
+    kb_pk: KyberPublicKey,
 }
 
 impl PrivateBundle {
-    pub fn new(x_sk: &x25519_dalek::StaticSecret, ed_sk: &ed25519_dalek::SigningKey, kb_seed: [u8; 32], dl_seed: [u8; 32]) -> Self {
-        let kb = pqc_kyber::keypair(&mut ChaCha20Rng::from_seed(kb_seed)).expect("Failed to generate kyber keypair");
-        let dl = pqc_dilithium::Keypair::generate(&mut ChaCha20Rng::from_seed(dl_seed)).expect("Failed to generate dilithium keypair");
-        Self {
-            x_sk: x_sk.clone(),
-            x_pk: x25519_dalek::PublicKey::from(x_sk),
-            ed_sk: ed_sk.clone(),
-            ed_pk: ed25519_dalek::VerifyingKey::from(ed_sk),
-            kb_sk: kb.secret,
-            kb_pk: kb.public,
-            dl_sk: dl.secret,
-            dl_pk: dl.public,
-        }
+    pub fn new(seed: [u8; 32], x_sk: [u8; 32], x_pk: [u8; 32], kb_sk: KyberSecretKey, kb_pk: KyberPublicKey) -> Self {
+        Self { seed, x_sk, x_pk, kb_sk, kb_pk }
     }
     pub fn random() -> Self {
-        let x_sk = x25519_dalek::StaticSecret::random_from_rng(&mut OsRng);
-        let ed_sk = ed25519_dalek::SigningKey::generate(&mut OsRng);
-        let kb = pqc_kyber::keypair(&mut OsRng).expect("Failed to generate kyber keypair");
-        let dl = pqc_dilithium::Keypair::generate(&mut OsRng).expect("Failed to generate dilithium keypair");
-        
-        Self {
-            x_sk: x_sk.clone(),
-            x_pk: x25519_dalek::PublicKey::from(&x_sk),
-            ed_sk: ed_sk.clone(),
-            ed_pk: ed25519_dalek::VerifyingKey::from(&ed_sk),
-            kb_sk: kb.secret,
-            kb_pk: kb.public,
-            dl_sk: dl.secret,
-            dl_pk: dl.public,
-        }
+        Self::from_seed(random_bytes())
     }
-    pub fn from_seed(seed: &[u8; 32]) -> Self {
-        let x_sk = utils::derive(seed, b"x25519-key");
-        let ed_sk = utils::derive(seed, b"ed25519-key");
-        let kb_seed = utils::derive(seed, b"kb-seed");
-        let dl_seed = utils::derive(seed, b"dl-seed");
+    pub fn from_seed(seed: [u8; 32]) -> Self {
+        let x_sk = x25519_dalek::StaticSecret::random_from_rng(&mut ChaCha20Rng::from_seed(seed));
+        let x_pk = x25519_dalek::PublicKey::from(&x_sk);
+        let kb = pqc_kyber::keypair(&mut ChaCha20Rng::from_seed(seed)).expect("failed to generate kyber");
         
-        Self::new(&x25519_dalek::StaticSecret::from(x_sk), &ed25519_dalek::SigningKey::from_bytes(&ed_sk), kb_seed, dl_seed)
-    }    
+        Self::new(seed, x_sk.to_bytes(), x_pk.to_bytes(), kb.secret, kb.public)
+    }
+    pub fn derive(&self, context: &[u8]) -> Self {
+        Self::from_seed(utils::derive(&self.seed, context))
+    }
     pub fn public(&self) -> PublicBundle {
-        PublicBundle::new(&self.x_pk, &self.ed_pk, &self.kb_pk, &self.dl_pk)
+        PublicBundle::new(self.x_pk, self.kb_pk)
     }
-    pub fn shared(&self, other: &PublicBundle) -> Result<([u8; pqc_kyber::KYBER_CIPHERTEXTBYTES], Vec<u8>), BundleError> {
-        let (ct, kb_shared) = self.encapsulate(other)?;
-        Ok((ct, [self.x_shared(other)?, kb_shared].concat()))
-    }
-    pub fn shared_from_ct(&self, other: &PublicBundle, ct: &[u8; pqc_kyber::KYBER_CIPHERTEXTBYTES]) -> Result<Vec<u8>, BundleError> {
-        Ok([self.x_shared(other)?, self.decapsulate(ct)?].concat())
-    }
+    pub fn shared(&self, other: &PublicBundle) -> Result<(KyberCiphertext, [u8; 32]), BundleError> {
+        let x_shared = x25519(self.x_sk, other.x_pk);
+        if x_shared == [0u8; 32] { return Err(BundleError::InvalidSharedKey); }
 
-    pub fn x_shared(&self, other: &PublicBundle) -> Result<[u8; 32], BundleError> {
-        let x_shared = self.x_sk.diffie_hellman(&other.x_pk).to_bytes();
-        if x_shared == [0u8; 32] {
-            return Err(BundleError::InvalidSharedKey);
-        }
-        Ok(x_shared)
-    }
-    pub fn encapsulate(&self, other: &PublicBundle) -> Result<([u8; pqc_kyber::KYBER_CIPHERTEXTBYTES], pqc_kyber::SharedSecret), BundleError> {
-        Ok(pqc_kyber::encapsulate(&other.kb_pk, &mut OsRng)?)
-    }
-    pub fn decapsulate(&self, ct: &[u8; pqc_kyber::KYBER_CIPHERTEXTBYTES]) -> Result<pqc_kyber::SharedSecret, BundleError> {
-        Ok(pqc_kyber::decapsulate(ct, &self.kb_sk)?)
-    }
-    pub fn sign(&self, data: Vec<u8>) -> (ed25519_dalek::Signature, [u8; pqc_dilithium::SIGNBYTES]) {
-        let hash = utils::hash(&data);
+        let (ct, kb_shared) = pqc_kyber::encapsulate(&other.kb_pk, &mut OsRng)?;
+        
+        let mut shared = [0u8; 64];
+        shared[..32].copy_from_slice(&x_shared);
+        shared[32..].copy_from_slice(&kb_shared);
 
-        let dl_keypair = pqc_dilithium::Keypair { public: self.dl_pk, secret: self.dl_sk };
-        let dl_signature = dl_keypair.sign(&hash, &mut OsRng).expect("Dilithium signing failed");
+        Ok((ct, utils::derive(&shared, b"shared")))
+    }
+    pub fn shared_from_ct(&self, other: &PublicBundle, ct: &[u8; pqc_kyber::KYBER_CIPHERTEXTBYTES]) -> Result<[u8; 32], BundleError> {
+        let x_shared = x25519(self.x_sk, other.x_pk);
+        if x_shared == [0u8; 32] { return Err(BundleError::InvalidSharedKey); };
 
-        (self.ed_sk.sign(&hash), dl_signature)
+        let mut shared = [0u8; 64];
+        shared[..32].copy_from_slice(&x_shared);
+        shared[32..].copy_from_slice(&pqc_kyber::decapsulate(ct, &self.kb_sk)?);
+
+        Ok(utils::derive(&shared, b"shared"))
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct PublicBundle {
-    pub x_pk: x25519_dalek::PublicKey,
-    pub ed_pk: ed25519_dalek::VerifyingKey,
+    pub x_pk: [u8; 32],
+    #[serde(with = "BigArray")]
     pub kb_pk: pqc_kyber::PublicKey,
-    pub dl_pk: [u8; pqc_dilithium::PUBLICKEYBYTES],
 }
 
 impl PublicBundle {
-    pub fn new(x_pk: &x25519_dalek::PublicKey, ed_pk: &ed25519_dalek::VerifyingKey, kb_pk: &pqc_kyber::PublicKey, dl_pk: &[u8; pqc_dilithium::PUBLICKEYBYTES]) -> Self {
-        Self { x_pk: *x_pk, ed_pk: *ed_pk, kb_pk: *kb_pk, dl_pk: *dl_pk }
-    }
-    pub fn to_bytes(&self) -> Bytes {
-        let mut buf = BytesMut::new();
-        buf.put_slice(self.x_pk.as_bytes());
-        buf.extend_from_slice(self.ed_pk.as_bytes());
-        buf.extend_from_slice(&self.kb_pk);
-        buf.extend_from_slice(&self.dl_pk);
-        buf.freeze()
-    }
-    pub fn verify(&self, signature: (ed25519_dalek::Signature, [u8; pqc_dilithium::SIGNBYTES]), data: Vec<u8>) -> Result<(), BundleError> {
-        let hash = utils::hash(&data);
-
-        self.ed_pk.verify(&hash, &signature.0)?;
-        pqc_dilithium::verify(&signature.1, &hash, &self.dl_pk).map_err(|_| BundleError::DilithiumError)?;
-        
-        Ok(())
+    pub fn new(x_pk: [u8; 32], kb_pk: KyberPublicKey) -> Self {
+        Self { x_pk, kb_pk }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use rand::rngs::OsRng;
-    use crate::bundles::PrivateBundle;
+    use crate::{bundles::PrivateBundle, utils::{random_bytes, serialize}};
 
     #[test]
     fn test_shared_secret() {
-        let x_sk1 = x25519_dalek::StaticSecret::random_from_rng(&mut OsRng);
-        let ed_sk1 = ed25519_dalek::SigningKey::generate(&mut OsRng);
-        let kb_seed1 = [1u8; 32];
-        let dl_seed1 = [2u8; 32];
-
-        let x_sk2 = x25519_dalek::StaticSecret::random_from_rng(&mut OsRng);
-        let ed_sk2 = ed25519_dalek::SigningKey::generate(&mut OsRng);
-        let kb_seed2 = [3u8; 32];
-        let dl_seed2 = [4u8; 32];
-
-        let alice = PrivateBundle::new(&x_sk1, &ed_sk1, kb_seed1, dl_seed1);
-        let bob = PrivateBundle::new(&x_sk2, &ed_sk2, kb_seed2, dl_seed2);
+        let alice = PrivateBundle::random();
+        let bob = PrivateBundle::random();
 
         let alice_pub = alice.public();
         let bob_pub = bob.public();
@@ -170,28 +108,11 @@ mod tests {
 
     #[test]
     fn test_deterministic_generation() {
-        let x_sk = x25519_dalek::StaticSecret::random_from_rng(&mut OsRng);
-        let ed_sk = ed25519_dalek::SigningKey::generate(&mut OsRng);
-        let kb_seed = [1u8; 32];
-        let dl_seed = [2u8; 32];
+        let seed = random_bytes();
 
-        let alice1 = PrivateBundle::new(&x_sk, &ed_sk, kb_seed, dl_seed);
-        let alice2 = PrivateBundle::new(&x_sk, &ed_sk, kb_seed, dl_seed);
+        let alice1 = PrivateBundle::from_seed(seed);
+        let alice2 = PrivateBundle::from_seed(seed);
         
-        assert_eq!(alice1.public().to_bytes(), alice2.public().to_bytes(), "Equivalent bundles must match");
-    }
-
-    #[test]
-    fn test_sign_and_verify() {
-        let priv_bundle = PrivateBundle::random();
-        let pub_bundle = priv_bundle.public();
-
-        let message = b"Hello, world!".to_vec();
-        let mut signature = priv_bundle.sign(message.clone());
-
-        assert!(pub_bundle.verify(signature, message.clone()).is_ok(), "Signature verification failed");
-        signature.1[0] += 1;
-
-        assert!(pub_bundle.verify(signature, message.clone()).is_err(), "Signature verification failed");
+        assert_eq!(serialize(&alice1.public()).expect("serialize failed"), serialize(&alice2.public()).expect("serialize failed"), "Equivalent bundles must match");
     }
 }

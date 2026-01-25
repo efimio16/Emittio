@@ -15,8 +15,8 @@ pub enum CryptoError {
     #[error("decryption failed")]
     AesGcmDecryption(aes_gcm::Error),
 
-    #[error("cannot accept connection")]
-    CannotAcceptConn,
+    #[error("ephemeral client cannot accept handshakes or have static identity")]
+    EphemeralClient,
 }
 
 #[derive(Debug, Error)]

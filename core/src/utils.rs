@@ -1,8 +1,10 @@
 use hkdf::Hkdf;
+use rand::{RngCore, rngs::OsRng};
 use serde::{Deserialize, Serialize};
 use sha2::{Sha256};
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
+use pqc_kyber::{KYBER_CIPHERTEXTBYTES, KYBER_PUBLICKEYBYTES, KYBER_SECRETKEYBYTES};
 
 #[derive(Debug, Error)]
 pub enum SerdeError {
@@ -13,23 +15,18 @@ pub enum SerdeError {
     Deserialize(postcard::Error),
 }
 
-pub fn info(a: &[u8], b: u32) -> Vec<u8> {
-    let mut info = Vec::new();
-    info.extend_from_slice(a);
-    info.extend_from_slice(&b.to_be_bytes());
-    info
+#[derive(Debug, Error)]
+pub enum ChannelError {
+    #[error("channel is closed")]
+    Closed
 }
 
-pub fn derive(seed: &[u8], info: &[u8]) -> [u8; 32] {
+pub fn derive(seed: &[u8], context: &[u8]) -> [u8; 32] {
     let mut okm = [0u8; 32];
     Hkdf::<Sha256>::new(Some(b"emittio-protocol-v1"), seed)
-        .expand(info, &mut okm)
+        .expand(context, &mut okm)
         .expect("HKDF expansion failed");
     okm
-}
-
-pub fn hash(data: &[u8]) -> [u8; 32] {
-    blake3::hash(data).into()
 }
 
 pub fn get_timestamp() -> u64 {
@@ -39,11 +36,20 @@ pub fn get_timestamp() -> u64 {
         .as_secs()
 }
 
-pub fn serialize<T>(value: &T) -> Result<Vec<u8>, SerdeError>
-where T: Serialize + ?Sized {
+pub fn serialize<T: Serialize + ?Sized>(value: &T) -> Result<Vec<u8>, SerdeError> {
     postcard::to_allocvec(value).map_err(SerdeError::Serialize)
 }
 
 pub fn deserialize<'a, T: Deserialize<'a>>(s: &'a [u8]) -> Result<T, SerdeError> {
     postcard::from_bytes(s).map_err(SerdeError::Deserialize)
 }
+
+pub fn random_bytes<const T: usize>() -> [u8; T] {
+    let mut buf = [0u8; T];
+    OsRng.fill_bytes(&mut buf);
+    buf
+}
+
+pub(super) type KyberSecretKey = [u8; KYBER_SECRETKEYBYTES];
+pub(super) type KyberPublicKey = [u8; KYBER_PUBLICKEYBYTES];
+pub(super) type KyberCiphertext = [u8; KYBER_CIPHERTEXTBYTES];

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{net::{packet::ConnId, session::NetSession}, peer::PeerId};
+use crate::{net::{ConnId, NetSession}, peer::PeerId};
 
 pub struct SessionStore {
     by_conn: HashMap<ConnId, NetSession>,

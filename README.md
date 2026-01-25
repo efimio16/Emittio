@@ -62,7 +62,7 @@ In other words, how it works.
 3. [x] Tags, their storage and lookup
 4. [x] Application-level transport encryption
 5. [x] `PeerTable` service
-6. [ ] DHT
+6. [x] DHT
 7. [ ] QUIC and/or TCP transports
 8. [ ] Mixnet (onion-like routing & dummy requests)
 9. [ ] Quorums
@@ -80,6 +80,12 @@ If you are interested in:
 - and, in general, creating something new
 
 you can contact us at [emittio@proton.me](mailto:emittio@proton.me).
+
+## 👥 Contributors
+
+Thanks to everyone who contributed to this project! 🌟
+
+- [@mikeyoung3k](https://github.com/mikeyoung3k)
 
 ## 🟢 Status
 
