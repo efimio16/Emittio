@@ -18,7 +18,7 @@ pub struct DhtRoutingDispatcher {
 }
 
 impl DhtRoutingDispatcher {
-    pub async fn closest_peers(&mut self, cid: CID) -> Result<Vec<PeerId, MAX_PEERS>, ChannelError> {
+    pub async fn closest_peers(&self, cid: CID) -> Result<Vec<PeerId, MAX_PEERS>, ChannelError> {
         let (tx, rx) = oneshot::channel();
         self.tx.send(DhtRoutingCmd::ClosestPeers { cid, reply: tx }).await.map_err(|_| ChannelError::Closed)?;
         rx.await.map_err(|_| ChannelError::Closed)

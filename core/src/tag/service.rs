@@ -1,12 +1,12 @@
-use std::{collections::BTreeMap, path::PathBuf};
-use tokio::{fs::{File, OpenOptions}, io::{AsyncReadExt, AsyncWriteExt}, sync::mpsc, time::{Duration, interval}};
+use std::{collections::BTreeMap, io::SeekFrom, path::PathBuf};
+use tokio::{fs::{File, OpenOptions}, io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt}, sync::mpsc, time::{Duration, interval}};
 use tokio_util::sync::CancellationToken;
 use std::mem;
 
 use crate::{service::Service, tag::{Tag, TagDispatcher, TagServiceCmd, TagServiceError}, utils::{self, ChannelError}};
 
 const TTL_PRODUCTION: u64 = 3600 * 24 * 7;
-const TTL_DEVELOPMENT: u64 = 20;
+const TTL_DEVELOPMENT: u64 = 5;
 const MIN_HASH: [u8; 32] = [0u8; 32];
 const CHAN_SIZE: usize = 10000;
 const TICK_INTERVAL: Duration = Duration::from_secs(5);
@@ -34,7 +34,10 @@ impl TagService {
 
         let (tx, rx) = mpsc::channel(CHAN_SIZE);
 
-        Ok((Self { rx, tags: utils::deserialize(&buffer)?, ttl_seconds: TTL_DEVELOPMENT, path, pending_tags: Vec::new() }, TagDispatcher { tx }))
+        let tags: BTreeMap<(u64, [u8; 32]), Tag> = utils::deserialize(&buffer)?;
+        println!("tags len {}", tags.len());
+
+        Ok((Self { rx, tags, ttl_seconds: TTL_DEVELOPMENT, path, pending_tags: Vec::new() }, TagDispatcher { tx }))
     }
 }
 
@@ -69,6 +72,7 @@ impl Service for TagService {
                     mem::swap(&mut self.tags, &mut expired);
 
                     file.set_len(0).await?;
+                    file.seek(SeekFrom::Start(0)).await?;
                     file.write_all(&utils::serialize(&self.tags)?).await?;
                 }
                 Some(cmd) = self.rx.recv() => {
@@ -89,32 +93,34 @@ impl Service for TagService {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-    use tokio::time::sleep;
+    use std::{path::PathBuf, time::Duration};
+    use tempfile::tempdir;
+    use tokio::{task::JoinHandle, time::sleep};
     use tokio_util::sync::CancellationToken;
 
-    use crate::{tag::{Tag, TagPayload, TagDispatcher, TagService}, service::Service};
+    use crate::{service::Service, tag::{Tag, TagDispatcher, TagPayload, TagService, TagServiceError}, utils::random_bytes};
 
-    async fn setup_service(path: &str) -> TagDispatcher {
-        let (service, dispatcher) = TagService::create(path.into()).await.unwrap();
-        tokio::spawn(service.run(CancellationToken::new()));
+    async fn setup_service(path: PathBuf, token: CancellationToken) -> (TagDispatcher, JoinHandle<Result<(), TagServiceError>>) {
+        let (service, dispatcher) = TagService::create(path).await.unwrap();
+        let handle = tokio::spawn(service.run(token));
 
-        dispatcher
+        (dispatcher, handle)
     }
 
     fn example_tag() -> Tag {
-        Tag::new(&rand::random(), TagPayload { data: b"Hello!".into() }).unwrap()
+        Tag::new(&random_bytes(), TagPayload { data: b"Hello!".into() }).unwrap()
     }
 
     #[tokio::test]
     async fn test_tag_exists() {
-        let mut dispatcher = setup_service("tags1.bin").await;
+        let tmp = tempdir().unwrap();
+        let (dispatcher, _) = setup_service(tmp.path().join("tags1.bin"), CancellationToken::new()).await;
         let tag = example_tag();
 
         dispatcher.put_tag(tag.clone()).await.expect("send tag failed");
 
-        println!("Waiting 5 seconds...");
-        sleep(Duration::from_secs(5)).await;
+        println!("Waiting 2 seconds...");
+        sleep(Duration::from_secs(2)).await;
         
         let tags = dispatcher.get_tags().await.expect("receive tags failed");
         assert_eq!(tags[0].hash, tag.hash);
@@ -122,13 +128,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_tag_disappears() {
-        let mut dispatcher = setup_service("tags2.bin").await;
+        let tmp = tempdir().unwrap();
+        let (dispatcher, _) = setup_service(tmp.path().join("tags2.bin"), CancellationToken::new()).await;
         let tag = example_tag();
 
         dispatcher.put_tag(tag.clone()).await.expect("send tag failed");
 
-        println!("Waiting 25 seconds...");
-        sleep(Duration::from_secs(25)).await;
+        println!("Waiting 10 seconds...");
+        sleep(Duration::from_secs(10)).await;
 
         let tags = dispatcher.get_tags().await.expect("receive tags failed");
         assert_eq!(tags.len(), 0);
@@ -136,18 +143,22 @@ mod tests {
 
     #[tokio::test]
     async fn test_load_from_file() {
-        let dispatcher_1 = setup_service("tags3.bin").await;
+        let token = CancellationToken::new();
+        let tmp = tempdir().unwrap();
+        let p = tmp.path().join("tags3.bin");
+
+        let (dispatcher_1, handle) = setup_service(p.clone(), token.clone()).await;
         let tag = example_tag();
 
         dispatcher_1.put_tag(tag.clone()).await.expect("send tag failed");
 
-        println!("Waiting 5 seconds...");
-        sleep(Duration::from_secs(5)).await;
-
-        println!("Waiting 1 more second...");
+        println!("Waiting 1 seconds...");
         sleep(Duration::from_secs(1)).await;
 
-        let (service, mut dispatcher_2) = TagService::load_from_file("tags3.bin".into()).await.unwrap();
+        token.cancel();
+        handle.await.unwrap().unwrap();
+
+        let (service, dispatcher_2) = TagService::load_from_file(p).await.unwrap();
         tokio::spawn(service.run(CancellationToken::new()));
 
         let tags = dispatcher_2.get_tags().await.expect("receive tags failed");

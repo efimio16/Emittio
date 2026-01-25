@@ -87,7 +87,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_dht_storage() {
+    async fn test_dht_routing() {
         let peer_table = create_peer_table();
 
         let me = peer(0);
@@ -97,7 +97,7 @@ mod tests {
 
         peer_table.add_peer(other).await.expect("failed to add peer");
         
-        let (dht_routing, mut dht_routing_dispatcher) = DhtRouting::new(me.id, peer_table);
+        let (dht_routing, dht_routing_dispatcher) = DhtRouting::new(me.id, peer_table);
     
         let token = CancellationToken::new();
         let handle = tokio::spawn(dht_routing.run(token.clone()));
@@ -119,7 +119,7 @@ mod tests {
         peer_table.add_peer(peer(1)).await.expect("failed to add peer");
         peer_table.add_peer(peer(2)).await.expect("failed to add peer");
 
-        let (service, mut api) = DhtRouting::new(me.id, peer_table);
+        let (service, api) = DhtRouting::new(me.id, peer_table);
 
         let token = CancellationToken::new();
         let handle = tokio::spawn(service.run(token.clone()));
@@ -132,4 +132,4 @@ mod tests {
         token.cancel();
         handle.await.unwrap().unwrap();
     }
-    }
+}
