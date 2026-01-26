@@ -3,12 +3,12 @@ use thiserror::Error;
 
 use crate::{payload::{Action, Query, QueryError, Reply, ReplyError, TryFromQuery, TryFromReply}, pow::Pow};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum PowQuery {
     Get(Action),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum PowReply {
     Require(Pow),
     Err(PowReplyErr),

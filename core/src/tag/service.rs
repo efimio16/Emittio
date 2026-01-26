@@ -35,7 +35,6 @@ impl TagService {
         let (tx, rx) = mpsc::channel(CHAN_SIZE);
 
         let tags: BTreeMap<(u64, [u8; 32]), Tag> = utils::deserialize(&buffer)?;
-        println!("tags len {}", tags.len());
 
         Ok((Self { rx, tags, ttl_seconds: TTL_DEVELOPMENT, path, pending_tags: Vec::new() }, TagDispatcher { tx }))
     }

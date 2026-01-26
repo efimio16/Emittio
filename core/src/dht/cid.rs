@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, Hash, Eq, PartialEq, Debug)]
 pub struct CID([u8; 32]);
 
 impl CID {

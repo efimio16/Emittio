@@ -103,8 +103,8 @@ mod tests {
 
         dispatcher.put(cid.clone(), content.clone()).await.expect("save content failed");
 
-        println!("Waiting 2 seconds...");
-        sleep(Duration::from_secs(2)).await;
+        println!("Waiting 1 second...");
+        sleep(Duration::from_secs(1)).await;
         
         let result1 = dispatcher.get(cid).await.expect("get content failed");
         assert_eq!(result1, Some(content));

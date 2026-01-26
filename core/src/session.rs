@@ -1,6 +1,6 @@
 use rand;
 
-use crate::{bundles::{PrivateBundle}, inbox::Inbox};
+use crate::{bundles::PrivateBundle, inbox::Inbox, utils::random_bytes};
 
 pub struct Session {
     seed: [u8; 32],
@@ -8,7 +8,7 @@ pub struct Session {
 
 impl Session {
     pub fn new() -> Self {
-        Self { seed: rand::random() }
+        Self { seed: random_bytes() }
     }
     pub fn inbox(&self, index: u32) -> Inbox {
         Inbox::new(self.inbox_keys(index))

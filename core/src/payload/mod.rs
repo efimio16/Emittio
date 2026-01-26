@@ -9,20 +9,20 @@ pub use dht::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum Payload {
     Query(Query),
     Reply(Reply),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum Query {
     Pow(PowQuery),
     Tag(TagQuery),
     Dht(DhtQuery),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum Reply {
     Empty,
     Ok,
@@ -46,7 +46,7 @@ pub enum ReplyError {
 pub trait TryFromQuery: TryFrom<Query, Error = QueryError> {}
 pub trait TryFromReply: TryFrom<Reply, Error = ReplyError> {}
 
-#[derive(Serialize, Deserialize, Clone, Copy)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 #[repr(u16)]
 pub enum Action {
     PublishTag = 1,

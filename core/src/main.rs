@@ -17,10 +17,9 @@ mod dht;
 mod id;
 
 use std::time::Duration;
-use rand::random;
 use tokio::time::sleep;
 
-use crate::{client::Client, dht::DhtStorage, envelope::Envelope, node::NodeService, peer::PeerTable, service::ServiceManager, session::Session, tag::{TagManager, TagPayload, TagService}, transport::{MockTransport, TransportHandler, TransportParticipant}};
+use crate::{client::Client, dht::DhtStorage, envelope::Envelope, node::NodeService, peer::PeerTable, service::ServiceManager, session::Session, tag::{TagManager, TagPayload, TagService}, transport::{MockTransport, TransportHandler, TransportParticipant}, utils::random_bytes};
 
 const VERSION: u8 = 1;
 const DEFAULT_INBOX: u32 = 0;
@@ -34,14 +33,14 @@ async fn main() {
 
     let (transport_handler, transport_dispatcher) = TransportHandler::new();
     let (mut client, client_service) = Client::new(transport_dispatcher);
-    transport.add_peer(&client, transport_handler).await.expect("failed to add peer");
+    transport.add_participant(&client, transport_handler).await.expect("failed to add peer");
 
     let (dht_storage_service, dht_storage_dispatcher) = DhtStorage::create("dht.bin".into()).await.expect("dht storage init failed");
 
     let (transport_handler, transport_dispatcher) = TransportHandler::new();
 
-    let (node_dispatcher, node_service, dht_routing_service) = NodeService::new(transport_dispatcher, tag_dispatcher, random(), dht_storage_dispatcher, peer_dispatcher.clone());
-    transport.add_peer(&node_dispatcher, transport_handler).await.expect("failed to add peer");
+    let (node_dispatcher, node_service, dht_routing_service) = NodeService::new(transport_dispatcher, tag_dispatcher, random_bytes(), dht_storage_dispatcher, peer_dispatcher.clone());
+    transport.add_participant(&node_dispatcher, transport_handler).await.expect("failed to add peer");
 
     let node_id = node_dispatcher.net_client().identity().expect("node should have a static identity").peer_id();
     
@@ -58,6 +57,7 @@ async fn main() {
     service_manager.spawn(dht_routing_service);
 
     let main = async {
+        sleep(Duration::from_secs(1)).await;
 
         let tags = client.get_tags(&node_id).await.expect("get tags failed");
 

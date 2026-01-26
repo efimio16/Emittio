@@ -1,5 +1,5 @@
 use hkdf::Hkdf;
-use rand::{RngCore, rngs::OsRng};
+use rand::{RngCore, rngs::OsRng, Rng, thread_rng, distributions::Alphanumeric};
 use serde::{Deserialize, Serialize};
 use sha2::{Sha256};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -48,6 +48,16 @@ pub fn random_bytes<const T: usize>() -> [u8; T] {
     let mut buf = [0u8; T];
     OsRng.fill_bytes(&mut buf);
     buf
+}
+
+pub fn mock_peer_addr() -> String {
+    let id: String = thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(12)
+        .map(char::from)
+        .collect();
+
+    format!("mock://{id}")
 }
 
 pub(super) type KyberSecretKey = [u8; KYBER_SECRETKEYBYTES];

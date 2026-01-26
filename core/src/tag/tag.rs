@@ -6,7 +6,7 @@ use aes_gcm::{
 };
 use bytes::{BufMut, Bytes, BytesMut};
 
-use crate::{VERSION, tag::TagError, utils::{self, deserialize, serialize}};
+use crate::{VERSION, tag::TagError, utils::{self, deserialize, random_bytes, serialize}};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Tag {
@@ -20,7 +20,7 @@ pub struct Tag {
 
 impl Tag {
     pub fn new(seed: &[u8; 32], plaintext: TagPayload) -> Result<Self, TagError> {
-        let info = rand::random();
+        let info = random_bytes();
         let hash = Self::hash(seed, &info);
 
         let created_at = utils::get_timestamp();
@@ -94,7 +94,7 @@ pub struct TagManager {
 
 impl TagManager {
     pub fn new() -> Self {
-        Self { seed: rand::random(), tags: Vec::new() }
+        Self { seed: random_bytes(), tags: Vec::new() }
     }
     pub fn from_seed(seed: &[u8; 32]) -> Self {
         Self { seed: *seed, tags: Vec::new() }
@@ -116,13 +116,11 @@ impl TagManager {
 
 #[cfg(test)]
 mod tests {
-    use rand::random;
-
-    use crate::tag::{OwnedTag, TagManager, TagPayload};
+    use crate::{tag::{OwnedTag, TagManager, TagPayload}, utils::random_bytes};
 
     #[test]
     fn test_tag() {
-        let seed = random();
+        let seed = random_bytes();
 
         let owned_tag = OwnedTag::new(&seed, TagPayload { data: b"Hello!".into() }).expect("failed create tag");
 

@@ -13,7 +13,7 @@ fn pow_input(secret: &[u8; 32], timestamp: u64, action: Action, random: &[u8; 16
     hasher.finalize().into()
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Pow {
     pub input: [u8; 32],
     pub timestamp: u64,

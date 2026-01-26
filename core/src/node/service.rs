@@ -75,7 +75,6 @@ impl Service for NodeService {
                                         }
                                         TagQuery::Publish { tag, pow, nonce } => {
                                             if pow.verify_with_secret(&self.secret, nonce) {
-                                                println!("Tag to publish: {:#?}", tag.hash);
                                                 self.tag.put_tag(tag.clone()).await?;
 
                                                 self.reply(builder, Reply::Ok).await?;

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{payload::{Query, QueryError, Reply, ReplyError, TryFromQuery, TryFromReply}, pow::Pow, tag::Tag};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum TagQuery {
     Get,
     Publish {
@@ -12,7 +12,7 @@ pub enum TagQuery {
     },
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum TagReply {
     Return(Vec<Tag>),
 }

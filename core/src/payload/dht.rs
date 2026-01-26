@@ -3,13 +3,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::{dht::CID, payload::{Query, QueryError, Reply, ReplyError, TryFromQuery, TryFromReply}};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum DhtQuery {
     Get(CID),
     Put(Bytes),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum DhtReply {
     Return(Option<Bytes>),
 }
