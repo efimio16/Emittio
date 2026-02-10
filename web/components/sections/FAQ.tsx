@@ -1,147 +1,158 @@
-'use client';
-import { ChevronDownIcon } from "@heroicons/react/20/solid";
+import { ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
+import Description from "../elements/Description";
+import { TypingAnimation } from "../elements/TypingAnimation";
+import Heading from "../elements/Heading";
 
-export default function FAQ() {
+const faq = [
+    {
+        question: "Is this really anonymous?",
+        answer: [
+            "Yes. The system is designed so your identity is never collected or stored.",
+            "There are no accounts, no personal data, and no way to link your aliases together.",
+        ]
+    },	
+    {
+        question: "Do I need to create an account?",
+        answer: [
+            "No.",
+            "There is no signup, no username, and no password.",
+            "Everything works without creating an account.",
+        ]
+    },	
+    {
+        question: "Can you see my emails?",
+        answer: [
+            "No.",
+            "Messages are encrypted on your device before they are sent.",
+            "Only the recipient can read them.",
+        ]
+    },	
+    {
+        question: "Is it free?",
+        answer: [
+            "Yes.",
+            "Core features will always be free.",
+            "We may introduce optional paid features later to support development.",
+        ]
+    },	
+    {
+        question: "How long are my emails stored?",
+        answer: [
+            "Messages are stored temporarily in the network for up to one week.",
+            "This is not for privacy reasons — it helps prevent the network from being overloaded by millions of temporary emails, newsletters, and verification codes.",
+            "You can still optionally save emails locally on your device for as long as you like.",
+            "This way, you control your archive while the network stays fast and efficient.",
+        ]
+    },	
+    {
+        question: "Is it legal?",
+        answer:[
+            "Yes.",
+            "This is a privacy-focused email system designed to protect users from ",
+            "tracking and data collection.",
+            "It does not enable or encourage illegal activity.",
+        ]
+    },	
+    {
+        question: "Is this related to cryptocurrencies?",
+        answer: [
+            "No.",
+            "While the network is decentralized — similar to many cryptocurrencies — it has completely different goals and infrastructure.",
+            "There are no tokens, no wallets, and no financial transactions.",
+        ]
+    },	
+    {
+        question: "Is it as simple as regular email?",
+        answer: [
+            "Yes.",
+            "It's even simpler — there are no accounts, usernames, or passwords to remember.",
+        ]
+    },
+    {
+        question: "Can I email Gmail / Outlook?",
+        answer: [
+            "Yes.",
+            "You can send and receive emails from traditional email services.",
+        ]
+    },	
+    {
+        question: "Can I switch from Gmail to your network?",
+        answer: [
+            "Yes.",
+            "Email import and migration are planned, but may not be available in the first release.",
+        ]
+    },	
+    {
+        question: "Can I use multiple devices?",
+        answer: [
+            "Yes.",
+            "You can access your aliases across devices and stay in sync with created or deleted aliases — without creating an account.",
+        ]
+    },
+    {
+        question: "What if I lose all my devices?",
+        answer: [
+            "You can recover your aliases using a recovery file that contains your ",
+            "private seed.",
+            "",
+            "Please note:",
+            "- This is the only way to recover access.",
+            "- Store it securely and offline.",
+            "- Anyone with this file has full control over your aliases.",
+            "",
+            "You are the only one responsible for your inbox.",
+        ]
+    },	
+    {
+        question: "Does it work with Tor?",
+        answer: [
+            "Yes.",
+            "The system works over Tor.",
+        ]
+    },	
+    {
+        question: "Is it open source?",
+        answer: [
+            "Yes.",
+            "The protocol and code are public, so anyone can verify how the system works.",
+        ]
+    },
+    {
+        question: "When will it be available?",
+        answer: [
+            "The project is under active development.",
+            "You can join the waitlist to get early access.",
+        ]
+    },
+];
+
+export default function FaqSection() {
     const [open, setOpen] = useState<number>();
-
+    
     return (
-        <section id="faq" className="flex flex-col py-4 items-center mb-10">
-            <h2 className="text-5xl text-center w-full mb-5">FAQ</h2>
-            <div className="max-w-300 w-4/5">
-                <div data-open={open === 0 || null} className="group mb-3 outline-1 data-open:outline-primary data-open:outline-2 transition-color duration-150 outline-gray-300 rounded-3xl p-5 dark:outline-gray-700 bg-gray-100 dark:bg-gray-900"  onClick={() => setOpen(open => open === 0 ? undefined : 0)}>
-                    <p className="flex items-center justify-between">
-                        <span className="text-lg">
-                            How is Emittio different from Gmail or ProtonMail?
-                        </span>
-                        <ChevronDownIcon className="size-5 flex-none group-data-open:rotate-180 transition-transform duration-300" />
-                    </p>
-                    <p className="group-[&:not([data-open])]:hidden text-gray-600 mt-2 dark:text-gray-400">
-                        Emittio is decentralized, encrypted by default, and doesn&apos;t rely on central servers. It uses distributed storage (IPFS), anonymous routing, and requires no personal data or traditional accounts.
-                    </p>
-                </div>
-                <div data-open={open === 1 || null} className="group mb-3 outline-1 data-open:outline-primary data-open:outline-2 transition-color duration-150 outline-gray-300 rounded-3xl p-5 dark:outline-gray-700 bg-gray-100 dark:bg-gray-900" onClick={() => setOpen(open => open === 1 ? undefined : 1)}>
-                    <p className="flex items-center justify-between">
-                        <span className="text-lg">
-                            Is Emittio really anonymous?
-                        </span>
-                        <ChevronDownIcon className="size-5 flex-none group-data-open:rotate-180 transition-transform duration-300" />
-                    </p>
-                    <p className="group-[&:not([data-open])]:hidden text-gray-600 mt-2 dark:text-gray-400">
-                        Yes. Emittio hides your IP, doesn&apos;t require personal info, and uses random routes to deliver mail.
-                    </p>
-                </div>
-                <div data-open={open === 2 || null} className="group mb-3 outline-1 data-open:outline-primary data-open:outline-2 transition-color duration-150 outline-gray-300 rounded-3xl p-5 dark:outline-gray-700 bg-gray-100 dark:bg-gray-900" onClick={() => setOpen(open => open === 2 ? undefined : 2)}>
-                    <p className="flex items-center justify-between">
-                        <span className="text-lg">
-                            Do I need to register or create an account?
-                        </span>
-                        <ChevronDownIcon className="size-5 flex-none group-data-open:rotate-180 transition-transform duration-300" />
-                    </p>
-                    <p className="group-[&:not([data-open])]:hidden text-gray-600 mt-2 dark:text-gray-400">
-                        No traditional signup. You just create a nickname or key — no email, no phone, no ID.
-                    </p>
-                </div>
-                <div data-open={open === 3 || null} className="group mb-3 outline-1 data-open:outline-primary data-open:outline-2 transition-color duration-150 outline-gray-300 rounded-3xl p-5 dark:outline-gray-700 bg-gray-100 dark:bg-gray-900" onClick={() => setOpen(open => open === 3 ? undefined : 3)}>
-                    <p className="flex items-center justify-between">
-                        <span className="text-lg">
-                            Is it free to use?
-                        </span>
-                        <ChevronDownIcon className="size-5 flex-none group-data-open:rotate-180 transition-transform duration-300" />
-                    </p>
-                    <p className="group-[&:not([data-open])]:hidden text-gray-600 mt-2 dark:text-gray-400">
-                        Yes, core features are free. Premium options may come later to support the network.
-                    </p>
-                </div>
-                <div data-open={open === 4 || null} className="group mb-3 outline-1 data-open:outline-primary data-open:outline-2 transition-color duration-150 outline-gray-300 rounded-3xl p-5 dark:outline-gray-700 bg-gray-100 dark:bg-gray-900" onClick={() => setOpen(open => open === 4 ? undefined : 4)}>
-                    <p className="flex items-center justify-between">
-                        <span className="text-lg">
-                            Is it open-source?
-                        </span>
-                        <ChevronDownIcon className="size-5 flex-none group-data-open:rotate-180 transition-transform duration-300" />
-                    </p>
-                    <p className="group-[&:not([data-open])]:hidden text-gray-600 mt-2 dark:text-gray-400">
-                        Yes. All code — clients, nodes, smart contracts — is open and transparent.
-                    </p>
-                </div>
-                <div data-open={open === 5 || null} className="group mb-3 outline-1 data-open:outline-primary data-open:outline-2 transition-color duration-150 outline-gray-300 rounded-3xl p-5 dark:outline-gray-700 bg-gray-100 dark:bg-gray-900" onClick={() => setOpen(open => open === 5 ? undefined : 5)}>
-                    <p className="flex items-center justify-between">
-                        <span className="text-lg">
-                            Can anyone run a node?
-                        </span>
-                        <ChevronDownIcon className="size-5 flex-none group-data-open:rotate-180 transition-transform duration-300" />
-                    </p>
-                    <p className="group-[&:not([data-open])]:hidden text-gray-600 mt-2 dark:text-gray-400">
-                        Yes. Anyone can host a node and help keep the network fast and resilient.
-                    </p>
-                </div>
-                <div data-open={open === 6 || null} className="group mb-3 outline-1 data-open:outline-primary data-open:outline-2 transition-color duration-150 outline-gray-300 rounded-3xl p-5 dark:outline-gray-700 bg-gray-100 dark:bg-gray-900" onClick={() => setOpen(open => open === 6 ? undefined : 6)}>
-                    <p className="flex items-center justify-between">
-                        <span className="text-lg">
-                            What if a node or quorum goes offline?
-                        </span>
-                        <ChevronDownIcon className="size-5 flex-none group-data-open:rotate-180 transition-transform duration-300" />
-                    </p>
-                    <p className="group-[&:not([data-open])]:hidden text-gray-600 mt-2 dark:text-gray-400">
-                        Your mail is replicated. As long as one node in the quorum is alive, your message survives.
-                    </p>
-                </div>
-                <div data-open={open === 7 || null} className="group mb-3 outline-1 data-open:outline-primary data-open:outline-2 transition-color duration-150 outline-gray-300 rounded-3xl p-5 dark:outline-gray-700 bg-gray-100 dark:bg-gray-900" onClick={() => setOpen(open => open === 7 ? undefined : 7)}>
-                    <p className="flex items-center justify-between">
-                        <span className="text-lg">
-                            Can Emittio be censored or blocked?
-                        </span>
-                        <ChevronDownIcon className="size-5 flex-none group-data-open:rotate-180 transition-transform duration-300" />
-                    </p>
-                    <p className="group-[&:not([data-open])]:hidden text-gray-600 mt-2 dark:text-gray-400">
-                        Very difficult. Since it uses IPFS and independent nodes, there&apos;s no central point to target — and messages are cached across multiple regions.
-                    </p>
-                </div>
-                <div data-open={open === 8 || null} className="group mb-3 outline-1 data-open:outline-primary data-open:outline-2 transition-color duration-150 outline-gray-300 rounded-3xl p-5 dark:outline-gray-700 bg-gray-100 dark:bg-gray-900" onClick={() => setOpen(open => open === 8 ? undefined : 8)}>
-                    <p className="flex items-center justify-between">
-                        <span className="text-lg">
-                            Is it as fast as traditional email?
-                        </span>
-                        <ChevronDownIcon className="size-5 flex-none group-data-open:rotate-180 transition-transform duration-300" />
-                    </p>
-                    <p className="group-[&:not([data-open])]:hidden text-gray-600 mt-2 dark:text-gray-400">
-                        Yes. The system is lightweight and optimized for fast delivery without central servers.
-                    </p>
-                </div>
-                <div data-open={open === 9 || null} className="group mb-3 outline-1 data-open:outline-primary data-open:outline-2 transition-color duration-150 outline-gray-300 rounded-3xl p-5 dark:outline-gray-700 bg-gray-100 dark:bg-gray-900" onClick={() => setOpen(open => open === 9 ? undefined : 9)}>
-                    <p className="flex items-center justify-between">
-                        <span className="text-lg">
-                            What data does Emittio store about me?
-                        </span>
-                        <ChevronDownIcon className="size-5 flex-none group-data-open:rotate-180 transition-transform duration-300" />
-                    </p>
-                    <p className="group-[&:not([data-open])]:hidden text-gray-600 mt-2 dark:text-gray-400">
-                        None. We don&apos;t store IPs, names, emails, or any personal data.
-                    </p>
-                </div>
-                <div data-open={open === 10 || null} className="group mb-3 outline-1 data-open:outline-primary data-open:outline-2 transition-color duration-150 outline-gray-300 rounded-3xl p-5 dark:outline-gray-700 bg-gray-100 dark:bg-gray-900" onClick={() => setOpen(open => open === 10 ? undefined : 10)}>
-                    <p className="flex items-center justify-between">
-                        <span className="text-lg">
-                            Is there a mobile or desktop app?
-                        </span>
-                        <ChevronDownIcon className="size-5 flex-none group-data-open:rotate-180 transition-transform duration-300" />
-                    </p>
-                    <p className="group-[&:not([data-open])]:hidden text-gray-600 mt-2 dark:text-gray-400">
-                        A web app is coming first. Mobile and desktop versions will follow soon.
-                    </p>
-                </div>
-                <div data-open={open === 11 || null} className="group mb-3 outline-1 data-open:outline-primary data-open:outline-2 transition-color duration-150 outline-gray-300 rounded-3xl p-5 dark:outline-gray-700 bg-gray-100 dark:bg-gray-900" onClick={() => setOpen(open => open === 11 ? undefined : 11)}>
-                    <p className="flex items-center justify-between">
-                        <span className="text-lg">
-                            How secure is it?
-                        </span>
-                        <ChevronDownIcon className="size-5 flex-none group-data-open:rotate-180 transition-transform duration-300" />
-                    </p>
-                    <p className="group-[&:not([data-open])]:hidden text-gray-600 mt-2 dark:text-gray-400">
-                        Very. Emittio uses end-to-end encryption, unlinkable routing, and distributed storage — privacy is baked in.
-                    </p>
-                </div>
+        <section className="mx-auto py-24 px-6 max-w-7xl w-full flex flex-col items-center">
+            <Heading>
+                <TypingAnimation cursor={false}>Questions? Answers.</TypingAnimation>
+            </Heading>
+            <div className="w-full divide-y divide-gray-200 dark:divide-gray-800">
+                {faq.map(({ question, answer }, i) => 
+                    <div
+                        data-open={open === i || null}
+                        key={i}
+                        className="group w-full flex flex-col gap-3 mb-3 transition-color p-5 duration-150"
+                        onClick={() => setOpen(open => open === i ? undefined : i)}
+                    >
+                        <p className="flex items-center justify-between">
+                            <span className="text-lg">{question}</span>
+                            <ChevronDownIcon className="size-5 flex-none group-data-open:rotate-180 transition-transform duration-300" />
+                        </p>
+                        <Description className="group-[&:not([data-open])]:hidden">
+                            {answer.map((ln, i) => <span key={i}>{ln}<br/></span>)}
+                        </Description>
+                    </div>
+                )}
             </div>
         </section>
-    )
+    );
 }

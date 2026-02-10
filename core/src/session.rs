@@ -1,5 +1,3 @@
-use rand;
-
 use crate::{bundles::PrivateBundle, inbox::Inbox, utils::random_bytes};
 
 pub struct Session {

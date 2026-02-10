@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Source_Serif_4 } from 'next/font/google';
+import { Outfit } from 'next/font/google';
+import { ThemeProvider } from "next-themes";
 
 export const metadata: Metadata = {
   title: "Emittio — Anonymous Decentralized Email",
@@ -18,9 +19,10 @@ export const metadata: Metadata = {
   ],
 };
 
-const source_Serif_4 = Source_Serif_4({
+const outfit = Outfit({
   subsets: ['latin'],
-  preload: true
+  preload: true,
+  // weight: ["200", "500"],
 });
 
 export default function RootLayout({
@@ -29,9 +31,24 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`dark:bg-black bg-gray-50 dark:text-white ${source_Serif_4.className}`}>
+    <html lang="en" className="scroll-smooth" suppressHydrationWarning>
+      <body className={`dark:bg-black bg-gray-50 dark:text-white ${outfit.className} min-w-screen min-h-svh flex flex-col`}>
+        <svg id="filters"className="fixed h-0 w-0" preserveAspectRatio="xMidYMid slice">
+          <defs>
+            <filter id="morphing">
+              <feColorMatrix
+                  in="SourceGraphic"
+                  type="matrix"
+                  values="1 0 0 0 0
+                          0 1 0 0 0
+                          0 0 1 0 0
+                          0 0 0 255 -140" />
+            </filter>
+          </defs>
+        </svg>
+        <ThemeProvider>
           {children}
+        </ThemeProvider>
       </body>
     </html>
   );

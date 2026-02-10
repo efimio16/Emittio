@@ -15,9 +15,6 @@ pub enum BundleError {
     #[error(transparent)]
     Ed25519(#[from] ed25519_dalek::ed25519::Error),
 
-    #[error("Dilithium error")]
-    DilithiumError,
-
     #[error("invalid shared key")]
     InvalidSharedKey,
 }
