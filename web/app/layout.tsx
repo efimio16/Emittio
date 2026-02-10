@@ -5,7 +5,7 @@ import { ThemeProvider } from "next-themes";
 
 export const metadata: Metadata = {
   title: "Emittio — Anonymous Decentralized Email",
-  description: "Emittio is a privacy-first decentralized email platform using IPFS, encryption, and smart contracts. Join the waitlist now!",
+  description: "Emittio is a privacy-first decentralized email without identities. Join the waitlist now!",
   keywords: [
     "Emittio",
     "decentralized email",
