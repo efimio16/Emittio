@@ -5,7 +5,7 @@ use crate::{payload::{Payload, Query, Reply}, peer::PeerId};
 
 pub type MsgId = u64;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct IncomingMessage {
     pub from: PeerId,
     pub payload: Payload,
@@ -21,7 +21,7 @@ impl IncomingMessage {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct OutgoingMessage {
     pub to: PeerId,
     pub payload: Payload,

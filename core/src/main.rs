@@ -19,7 +19,7 @@ mod id;
 use std::time::Duration;
 use tokio::time::sleep;
 
-use crate::{client::Client, dht::DhtStorage, envelope::Envelope, node::NodeService, peer::PeerTable, service::ServiceManager, session::Session, tag::{TagManager, TagPayload, TagService}, transport::{MockTransport, TransportHandler, TransportParticipant}, utils::random_bytes};
+use crate::{client::Client, dht::DhtStorage, envelope::Envelope, net::{NetClient, SessionManager}, node::NodeService, peer::PeerTable, service::ServiceManager, session::Session, tag::{TagManager, TagPayload, TagService}, transport::{MockTransport, TransportHandler}, utils::random_bytes};
 
 const VERSION: u8 = 1;
 const DEFAULT_INBOX: u32 = 0;
@@ -29,24 +29,33 @@ async fn main() {
     let (tag_service, tag_dispatcher) = TagService::create("tags.bin".into()).await.expect("tag service init failed");
     let (peer_service, peer_dispatcher) = PeerTable::new();
 
+    let mut service_manager = ServiceManager::new();
+
     let mut transport = MockTransport::new(peer_dispatcher.clone());
+
+    let (session_manager_dispatcher, session_manager_service) = SessionManager::new(NetClient::Ephemeral);
+    service_manager.spawn(session_manager_service);
 
     let (transport_handler, transport_dispatcher) = TransportHandler::new();
     let (mut client, client_service) = Client::new(transport_dispatcher);
-    transport.add_participant(&client, transport_handler).await.expect("failed to add peer");
+    transport.add_participant(session_manager_dispatcher, None, transport_handler).await.expect("failed to add peer");
+
+    let seed = random_bytes();
+    let node_cl = NetClient::from_seed(seed.clone());
+    let node_identity = node_cl.identity().expect("node should have static identity");
+    let node_id = node_identity.peer_id();
 
     let (dht_storage_service, dht_storage_dispatcher) = DhtStorage::create("dht.bin".into()).await.expect("dht storage init failed");
 
+    let (session_manager_dispatcher, session_manager_service) = SessionManager::new(node_cl);
+    service_manager.spawn(session_manager_service);
+
     let (transport_handler, transport_dispatcher) = TransportHandler::new();
 
-    let (node_dispatcher, node_service, dht_routing_service) = NodeService::new(transport_dispatcher, tag_dispatcher, random_bytes(), dht_storage_dispatcher, peer_dispatcher.clone());
-    transport.add_participant(&node_dispatcher, transport_handler).await.expect("failed to add peer");
+    let (_, node_service, dht_routing_service) = NodeService::new(transport_dispatcher, tag_dispatcher, random_bytes(), dht_storage_dispatcher, peer_dispatcher.clone());
+    transport.add_participant(session_manager_dispatcher, Some(node_identity), transport_handler).await.expect("failed to add peer");
 
-    let node_id = node_dispatcher.net_client().identity().expect("node should have a static identity").peer_id();
-    
     let mut tag_manager = TagManager::new();
-
-    let mut service_manager = ServiceManager::new();
 
     service_manager.spawn(client_service);
     service_manager.spawn(node_service);
