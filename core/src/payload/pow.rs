@@ -3,18 +3,18 @@ use thiserror::Error;
 
 use crate::{payload::{Action, Query, QueryError, Reply, ReplyError, TryFromQuery, TryFromReply}, pow::Pow};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq,Clone)]
 pub enum PowQuery {
     Get(Action),
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug,PartialEq,Clone)]
 pub enum PowReply {
     Require(Pow),
     Err(PowReplyErr),
 }
 
-#[derive(Serialize, Deserialize, Debug, Error)]
+#[derive(Serialize, Deserialize, Debug, Error, PartialEq,Clone)]
 pub enum PowReplyErr {
     #[error("Incorrect nonce")]
     IncorrectNonce,

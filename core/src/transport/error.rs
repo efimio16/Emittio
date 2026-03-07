@@ -1,6 +1,7 @@
 use thiserror::Error;
+use tokio::task::JoinError;
 
-use crate::{net::{CryptoError, NetError}, utils::{ChannelError, SerdeError}};
+use crate::{net::{CryptoError, NetError}, utils::{ChannelError, SerdeError},peer::{PeerId}};
 
 #[derive(Debug, Error)]
 pub enum MockTransportError {
@@ -24,4 +25,26 @@ pub enum MockTransportError {
 
     #[error("peer not found")]
     PeerNotFound,
+}
+
+#[derive(Debug, Error)]
+pub enum TransportError {
+    #[error("request was cancelled by token")]
+    Cancelled,
+
+    // Consider returning peer ID as data in this error
+    #[error("session not found")]
+    SessionNotFound,
+
+    #[error("peer already connected")]
+    PeerAlreadyConnected,
+
+    #[error(transparent)]
+    Serialization(#[from] postcard::Error),
+
+    #[error(transparent)]
+    IO(#[from] std::io::Error),
+
+    #[error(transparent)]
+    Join(#[from] JoinError),
 }

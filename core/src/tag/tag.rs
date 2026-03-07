@@ -8,7 +8,7 @@ use bytes::{BufMut, Bytes, BytesMut};
 
 use crate::{VERSION, tag::TagError, utils::{self, deserialize, random_bytes, serialize}};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Tag {
     nonce: [u8; 12],
     content: Vec<u8>,
