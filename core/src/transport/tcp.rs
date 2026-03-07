@@ -1,18 +1,19 @@
 use tokio_util::sync::CancellationToken;
 
-use tokio::net::{TcpStream, TcpListener, ToSocketAddrs};
+use tokio::{net::{TcpStream, TcpListener, ToSocketAddrs}};
 
 use std::{collections::HashMap};
 
 use postcard::{to_slice,from_bytes};
 
-use crate::{net::{NetService, NetSession, NetClient},payload::{Payload}, transport::TransportError, peer::{Peer,PeerId}, message::{IncomingMessage,OutgoingMessage}};
+use crate::{net::{ActiveSession, PendingSession, NetClient,NetService,Message},payload::{Payload}, transport::TransportError, peer::{Peer,PeerId}, message::{IncomingMessage,OutgoingMessage}};
 
 const BUFSIZE: usize = 256;
 pub struct TcpTransport{
-    sessions: HashMap<PeerId, (NetSession,TcpStream)>,
+    sessions: HashMap<PeerId, ActiveSession>,
+    streams: HashMap<PeerId, TcpStream>,
     client: NetClient,
-    listener: TcpListener,
+    listener: TcpListener, // Used to establish a new session - not in trait currently - todo
 }
 
 impl TcpTransport {
@@ -21,87 +22,125 @@ impl TcpTransport {
         let listener = TcpListener::bind(addr).await?;
         Ok(TcpTransport {
             sessions: HashMap::new(),
+            streams: HashMap::new(),
             client,
             listener,
         })
     }
-
 }
+
 
 impl NetService for TcpTransport {
     type Error = TransportError;
 
-    async fn add_session(&mut self, client: (Peer, NetSession)) -> Result<(), Self::Error> {
+    async fn add_session(&mut self, client: (Peer, ActiveSession)) -> Result<(), Self::Error> {
         if self.sessions.contains_key(&client.0.id) {
             return Err(TransportError::PeerAlreadyConnected)
         }
         let stream = TcpStream::connect(client.0.address).await?;
-        self.sessions.insert(client.0.id, (client.1, stream));
+        self.sessions.insert(client.0.id, client.1);
+        self.streams.insert(client.0.id,stream);
         Ok(())
     }
 
     fn drop_session(&mut self, peer: &PeerId) -> Result<(), Self::Error> {
         self.sessions.remove(peer).ok_or(TransportError::SessionNotFound)?;
+        self.streams.remove(peer).ok_or(TransportError::SessionNotFound)?;
         Ok(())
     }
 
-    async fn listen(&self, token: CancellationToken) -> Result<IncomingMessage, Self::Error> {
-        loop {
-            tokio::select!{
-                _ = token.cancelled() => return Err(TransportError::Cancelled),
-            }
-        }
-        todo!();
-    }
-    
-    async fn broadcast(&self, msg: Payload, token: CancellationToken) -> Result<(), Self::Error> {
-        loop {
-            tokio::select!{
-                _ = token.cancelled() => return Err(TransportError::Cancelled),
-            }
-        }
-        todo!();
-    }
-    
-    async fn transmit(&self, msg: Payload, target: Peer, token: CancellationToken) -> Result<(), Self::Error> {
-        todo!();
-        // Need to implement encyrption using NetSession
-        // Need to get a new NetSession by doing a handshake with the target peer
-        // I have a NetClient.
-        // My NetClient can do an encryption handshake with a target NetIdentity
-        // Then I accept the handshake with my NetClient and get a NetSession
-        // NetSession can then encrypt and decrypt. 
-        // But my target needs the same NetSession - how does it get that?
-        // If this is Diffie-Hellman then both sides have a NetClient, both sides send their own public key in the form of a NetIdentity.
-        // The handshake then creates a shared secret through DH magic
-        // The accept creates a net session?
-
-        // So I need to:
-        // 1. Send my NetIdentity to the target peer
-        // 2. Await receiving a NetIdentity - error if it is not a valid NetIdentity
-        // 3. Create a NetSession using the received NetIdentity
-        // 1a. Do steps 1-3 also on the target peer as well
-        // 4. Encrypt the message using the NetSession
-        // 5. Send the encrypted message to the target peer
-        // 6. Decrypt the message using the NetSession
-        // 7. Process the message
-            tokio::select!{
-                _ = token.cancelled() => return Err(TransportError::Cancelled),
-                r = async {
-                    let stream = TcpStream::connect(target.address).await?;
+    async fn listen(&mut self, token: CancellationToken) -> Result<IncomingMessage, Self::Error> {
+        let mut tasks= vec!();
+        for (id,stream) in self.streams.iter() {
+            let fut = Box::pin(async  {
+                // let mut session = session_mutex.lock().await;
+                let res = loop {
+                    stream.readable().await?;
                     let mut buf = [0u8; BUFSIZE];
-                    let data = to_slice(&msg, &mut buf)?;
-                    loop {
-                        stream.writable().await?;
-                        
-                        match stream.try_write(data) {
-                            Ok(_) => break,
-                            Err(ref e) if e.kind() == tokio::io::ErrorKind::WouldBlock => panic!("Would block"),
-                            Err(e) => return Err(e.into()),
+                    match stream.try_read(&mut buf) {
+                        Ok(0) => break Err(TransportError::ConnectionClosed),
+                        Ok(_) => {
+                            break Ok((*id,buf));
+                        }
+                        Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => continue,
+                        Err(e) => return Err::<(PeerId,[u8;BUFSIZE]),TransportError>(e.into()),
+                    }
+                };
+                res
+            });
+            tasks.push(fut);
+        };
+        let message = loop {
+            let futs = futures::future::select_all(tasks);
+            tokio::select!{
+            _ = token.cancelled() => return Err(TransportError::Cancelled),
+            (res,_,tasks_rem) = futs => {
+                tasks = tasks_rem;
+                match res {
+                    Ok((id,buf)) => {
+                        let session = self.sessions.get_mut(&id).ok_or(TransportError::SessionNotFound)?;
+                        let encrypted = from_bytes::<Message>(&buf)?;
+                        let decrypted = session.receive(encrypted)?;
+                        let received = from_bytes::<OutgoingMessage>(&decrypted)?;
+                        break Ok(IncomingMessage::receive(id,received))
+                    },
+                    Err(e) => {
+                        match e {
+                            TransportError::ConnectionClosed => {
+                                continue;
+                            },
+                            e => break Err(e),
                         }
                     }
-                    return Ok(());
-                } => return r,
+                }
+            }
+        };
+        };
+        message
+    }
+    
+    async fn broadcast(&mut self, msg: Payload, token: CancellationToken) -> Result<(), Self::Error> {
+        let keys = self.sessions.keys().map(|k| k.clone()).collect::<Vec<PeerId>>();
+        // Todo - make this non-serial if poss? Transmit requires mutable borrow of self due to session needing to be mutable.
+        for peer in keys {
+            self.transmit(msg.clone(), peer, token.clone()).await?;
+        }
+        Ok(())
+    }
+    
+    async fn transmit(&mut self, msg: Payload, target: PeerId, token: CancellationToken) -> Result<(), Self::Error> {
+            let session = self.sessions.get_mut(&target).ok_or(TransportError::SessionNotFound)?;
+            let stream = self.streams.get(&target).ok_or(TransportError::SessionNotFound)?;
+            
+            let res = tokio::select!{
+                _ = token.cancelled() => {
+                    Err(TransportError::Cancelled)
+                },
+                _ = async {
+                    let mut buf = [0u8; BUFSIZE];
+                    // Serialize once to get a format that can be encrypted
+                    let data = to_slice(&msg, &mut buf)?;
+                    let encrypted_data = session.send(data)?;
+                    // Empty buffer - Message is concrete and owned so we no longer need to keep the old buffer around
+                    let mut buf = [0u8; BUFSIZE];
+                    // Serialize again to get a sendable stream
+                    let serialized_data = to_slice(&encrypted_data, &mut buf)?;
+                    loop {
+                        stream.writable().await?;
+                        match stream.try_write(serialized_data) {
+                            Ok(_) => break,
+                            Err(ref e) if e.kind() == tokio::io::ErrorKind::WouldBlock => continue,
+                            Err(e) => return Err(e.into()),
+                        };
+
+                    }
+                    Ok::<(),TransportError>(())
+                } => Ok(()),
+            };
+            
+            match res {
+                Ok(()) => Ok(()),
+                Err(err) => Err(err),
             }
     }
 }
@@ -109,11 +148,12 @@ impl NetService for TcpTransport {
 #[cfg(test)]
 mod test {    
     use super::*;
-    use crate::{payload::{Query,TagQuery,Reply,Action}, tag::{Tag,TagPayload}, pow::{Pow}};
-    use std::sync::mpsc::{channel,Sender};
+    use crate::{message::OutgoingMessage,payload::{Action, Query, Reply, TagQuery}, pow::Pow, tag::{Tag,TagPayload}};
+    use std::{io::Write, sync::mpsc::{Sender, channel}};
     use tokio::time::timeout;
-    use std::{thread,time::{Duration}};
+    use std::{time::{Duration}};
     use std::io::Read;
+    use postcard::from_bytes;
 
     // Timeout for async function calls
     const TIMEOUT: Duration = Duration::from_millis(10);
@@ -123,6 +163,10 @@ mod test {
     // Create a generic transport for testing
     async fn ephemeral_transport() -> TcpTransport {
         TcpTransport::bind(NetClient::Ephemeral, "127.0.0.1:0").await.unwrap()
+    }
+
+    async fn static_transport() -> TcpTransport {
+        TcpTransport::bind(NetClient::from_seed([1u8; 32]), "127.0.0.1:0").await.unwrap()
     }
 
     #[tokio::test]
@@ -166,7 +210,8 @@ mod test {
         
         // First add should succeed - unique Peer ID
         let peer = Peer::new(client.identity().expect("Expect static identity"), addr.to_string());
-        let session = NetSession::new([0u8;32],0u64);
+        let pend_session = PendingSession::new([0u8;32],Some(0u64));
+        let session = pend_session.activate(None).expect("Failed to active test session");
         let expect_ok = transport.add_session((peer, session)).await;
         assert!(expect_ok.is_ok(),"Failed to add session: {}",expect_ok.err().unwrap());
         assert_eq!(transport.sessions.len(), 1);
@@ -174,7 +219,8 @@ mod test {
         // Creating a new Peer with the same peer ID should fail when added.
         // See comment in NetService trait about whether this behaviour should be changed.
         let peer = Peer::new(client.identity().expect("Expect static identity"), addr.to_string());
-        let session = NetSession::new([1u8;32],1u64);
+        let pend_session = PendingSession::new([1u8;32],Some(1u64));
+        let session = pend_session.activate(None).expect("Failed to active test session");
         let expect_fail = transport.add_session((peer,session)).await;
         assert!(expect_fail.is_err(),"Expected failure adding second entry with same peer ID");
     }
@@ -190,19 +236,23 @@ mod test {
         let mut ids = vec!();
         for i in 0..3 {
             let client = NetClient::from_seed([i as u8;32]);
-            let net_session = NetSession::new([i as u8;32],i as u64);
+            let pend_session = PendingSession::new([i as u8;32],Some(i as u64));
+            let net_session = pend_session.activate(None).expect("Failed to active test session");
             let stream = TcpStream::connect(addr).await.expect("Failed to connect to test server on {addr}");
             let peer = Peer::new(client.identity().expect("Expect static identity"), addr.to_string());
-            transport.sessions.insert(peer.id,(net_session,stream));
+            transport.sessions.insert(peer.id,net_session);
+            transport.streams.insert(peer.id,stream);
             ids.push(peer.id);
         }
         
         assert_eq!(transport.sessions.len(),3,"Expected 3 elements in starting transport");
+        assert_eq!(transport.streams.len(),3,"Expected 3 elements in starting transport");
         
         for i in (0..3).rev() {
             let expect_ok = transport.drop_session(&ids.pop().unwrap());
             assert!(expect_ok.is_ok());
             assert_eq!(transport.sessions.len(),i,"Failed to remove session {i}");
+            assert_eq!(transport.streams.len(),i,"Failed to remove session {i}");
         }
         
         let client = NetClient::from_seed([5 as u8;32]);
@@ -218,7 +268,16 @@ mod test {
         // Start a listener and move it into a thread after getting the port assigned by the OS.
         // Send a channel into the thread to read success/failure of expected values
         // Give it a handler function checking expected results and sending true/false over a channel
-        
+
+        // Create a dummy active session that can be used for testing message encryption
+        let (mut sender_shared_session,mut receiver_shared_session ) = gen_shared_sessions([0u8;32],5u64);
+
+        // Test that shared keys match and encryption/decryption work
+        let dummy_data = [1u8; 32];
+        let encrypt = sender_shared_session.send(&dummy_data).expect("Failed to encrypt dummy data");
+        let decrypt = receiver_shared_session.receive(encrypt).expect("Failed to decrypt dummy data");
+        assert_eq!(decrypt, dummy_data,"Decrypted dummy data did not match - discontinuing");
+
         let client = NetClient::from_seed([1u8;32]);
         let (send,results) = channel::<bool>();
         let expect_messages = sample_messages();
@@ -228,21 +287,22 @@ mod test {
         let addr = srv.local_addr().expect("Failed to get local address of thread");
 
         std::thread::spawn(move || {
-            for (stream,msg) in srv.incoming().zip(expect_messages.into_iter()) {
-                expect_message_tcp(
-                    stream.expect("Failed to get incoming stream"), 
-                    msg,
-                    send.clone());
-            }
-        });
 
-        let transport = ephemeral_transport().await;
+            let (stream, _) = srv.accept().expect("Failed to accept incoming stream");
+                expect_message_tcp(
+                    stream, 
+                    expect_messages,
+                    &mut receiver_shared_session,
+                    send.clone());
+        });
+        let mut transport = ephemeral_transport().await;
         let peer = Peer::new(client.identity().expect("Expect static identity"), addr.to_string());
+        transport.add_session((peer.clone(),sender_shared_session)).await.expect("Failed to add test session to transport");
         for (i,msg) in send_messages.into_iter().enumerate(){
             let cncl = CancellationToken::new();
             let res = timeout(
                 TIMEOUT,
-                transport.transmit(msg,peer.clone(), cncl)
+                transport.transmit(msg,peer.id.clone(), cncl)
             ).await;
             assert!(res.is_ok(),"Failed to transmit message {}: {}",i,res.err().unwrap());
             let got_msg = results.recv().expect("Failed to check receive result");
@@ -253,62 +313,206 @@ mod test {
     
     #[tokio::test]
     async fn test_listen(){
-        let mut transport = ephemeral_transport();
-        let client = NetClient::from_seed([1u8;32]);
+
+        let mut transport = static_transport().await;
         
+        let mut threads = vec!();
+
+        let mut expect_messages = vec!();
+        // Set up test clients to listen to - send a different message from each one
+        for (i,msg) in sample_messages().into_iter().enumerate() {
+            let (mut sender_session,receiver_session) = gen_shared_sessions([i as u8;32],i as u64 + 12);
+            
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("Failed to start test server");
+            let addr = listener.local_addr().expect("Failed to get local address of thread");
+            
+            let client = NetClient::from_seed([i as u8;32]);
+            let peer = Peer::new(client.identity().expect("Expect static ID"), addr.to_string());
+
+            expect_messages.push(
+                IncomingMessage{
+                    from: peer.id.clone(),
+                    payload: msg.clone(),
+                    id: 0,
+                }
+            );
+            
+            let send_message = OutgoingMessage{
+                to: transport.client.identity().expect("Expected an ID").peer_id(),
+                payload: msg.clone(),
+                id: 0,
+            };
+
+            transport.add_session((peer,receiver_session)).await.expect("Failed to add test session to transport");
+            let handle = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().expect("Failed to accept incoming stream");
+                let mut buf = [0; BUFSIZE];
+                let msg_bytes = to_slice(&send_message, &mut buf).expect("Failed to serialize message");
+                let encrypt = sender_session.send(&msg_bytes).expect("Failed to encrypt message");
+                let mut buf = [0; BUFSIZE];
+                let serialized = to_slice(&encrypt, &mut buf).expect("Failed to serialize encrypted message");
+                stream.write_all(serialized).expect("Failed to write to stream");
+            });
+            threads.push(handle);
+        }
+
+        for thread in threads {
+            thread.join().expect("Failed to join thread");
+        }
+
+        let mut got_messages = vec!();
+        for _ in 0..3 {
+            let cncl = CancellationToken::new();
+            let msg = transport.listen(cncl).await.expect("Failed to listen for messages");
+            got_messages.push(msg);
+        }
+
+        for msg in expect_messages {
+            assert!(got_messages.contains(&msg), "Received message did not match expected" );
+        }
+
+    }
+
+    #[tokio::test]
+    async fn test_broadcast(){
+        let num_test_clients: usize = 5;
+
+        let mut transport = ephemeral_transport().await;
+        let test_message = Payload::Query(Query::Tag(TagQuery::Get));
+        let (res_sender,res_receiver) = std::sync::mpsc::channel::<bool>();
         
-        // Start a server that will transmit messages
-        let srv = TcpListener::bind("127.0.0.1:0").await.expect("Failed to start test server");
-        let addr = srv.local_addr().expect("Failed to get local address of thread");
-        thread::spawn(async move || {
-            match srv.accept().await {
-                Ok(_) => {},
-                Err(e) => panic!("Failed to accept test server request: {}",e),
-            }
-        });
-        todo!();
+        let mut threads = vec!();
+        // Set up test clients to broadcast to
+        for i in 1..=num_test_clients {
+            let (sender_session,mut receiver_session) = gen_shared_sessions([i as u8;32],i as u64 + 12);
+            
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("Failed to start test server");
+            let addr = listener.local_addr().expect("Failed to get local address of thread");
+            
+            let client = NetClient::from_seed([i as u8;32]);
+            let peer = Peer::new(client.identity().expect("Expect static ID"), addr.to_string());
+
+            let res_chan = res_sender.clone();
+            
+            transport.add_session((peer,sender_session)).await.expect("Failed to add test session to transport");
+            let handle = std::thread::spawn(move || {
+                let (stream, _) = listener.accept().expect("Failed to accept incoming stream");
+                let expect_messages = vec!(Payload::Query(Query::Tag(TagQuery::Get)));
+                expect_message_tcp(
+                    stream, 
+                    expect_messages,
+                    &mut receiver_session,
+                    res_chan);
+            });
+            threads.push(handle);
+        }
+
+        // Broadcast the test message - extend the timeout to account for the number of messages
+        let cncl = CancellationToken::new();
+        let res = timeout(
+            TIMEOUT * num_test_clients as u32,
+            transport.broadcast(test_message, cncl)
+        ).await;
+
+        for thread in threads {
+            thread.join().expect("A thread failed");
+        }
+
+        // Close the channel to stop the iterator below hanging
+        drop(res_sender);
+
+        // Check results
+        assert!(res.is_ok(),"Failed to broadcast message {}",res.err().unwrap());
+        let got_msg = res_receiver.iter().collect::<Vec<bool>>();
+        assert_eq!(got_msg.len(),num_test_clients,"Expected {num_test_clients} but received {} results",got_msg.len());
+        assert!(got_msg.iter().all(|x| *x),"Not all messages received");
     }
 
     // Helper to test receiving messages over TCP
-    fn expect_message_tcp(mut stream: std::net::TcpStream, expect_message: Payload, results: Sender<bool>) {
-        'receive: loop {
-            let mut buf = [0u8;BUFSIZE];
-            match stream.read(&mut buf) {
-                Ok(0) => break,
-                Ok(_) => {},
-                Err(ref e) if e.kind() == tokio::io::ErrorKind::WouldBlock => {
-                    continue;
-                },
-                Err(e) => {
-                    eprintln!("Error reading message: {}", e);
-                    results.send(false).expect("Failed to send test failure due to TCP read");
-                    return
+    fn expect_message_tcp(mut stream: std::net::TcpStream, expect_messages: Vec<Payload>, session: &mut ActiveSession, results: Sender<bool>) {
+        for expect_message in expect_messages {
+            'receive: loop {
+                let mut buf = [0u8;BUFSIZE];
+                match stream.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(_) => {},
+                    Err(ref e) if e.kind() == tokio::io::ErrorKind::WouldBlock => {
+                        continue;
+                    },
+                    Err(e) => {
+                        eprintln!("Error reading message: {}", e);
+                        results.send(false).expect("Failed to send test failure due to TCP read");
+                        return
+                    }
                 }
-            }
 
-            match from_bytes::<Payload>(&buf) {
-                Ok(msg) => {
-                    if msg == expect_message {
-                        // Golden path
-                        results.send(true).expect("Failed to send test success");
-                    } else {
-                        // Bad deserialization
-                        eprintln!("Bad message. Got: \n{msg:?}\n expected: \n{expect_message:?}");
-                        results.send(false).expect("Failed to send test failure due to deserialization");
+                match from_bytes::<Payload>(&buf) {
+                    Err(e) => {
+                        match e {
+                            postcard::Error::SerdeDeCustom => {
+                                // Golden path - deserialization failure because the message is encrypted.
+                            },
+                            _ => {
+                                // No real reason to end up here.
+                                eprintln!("Error receiving encrypted message: {}", e);
+                                results.send(false).expect("Failed to send test failure");
+                            }
+                        }
+                    }
+                    Ok(_) => {
+                        // Failure - message was not encrypted
+                        results.send(false).expect("Failed to send test failure due to bad encrypton");
+                        
+                    }
+                }
+
+                let encrypted = match from_bytes::<Message>(&buf) {
+                    Ok(msg) => {
+                        msg
+                    },
+                    Err(e) => {
+                        match e {
+                            postcard::Error::DeserializeUnexpectedEnd => {
+                                // Loop again to get more data
+                                continue 'receive;
+                            },
+                            _ => {
+                                eprintln!("Error reading encrypted message: {}", e);
+                                results.send(false).expect("Failed to send test failure");
+                                break;
+                            }
+                        }
+                    }
+                };
+
+                let decrypted = match session.receive(encrypted) {
+                    Ok(msg) => {
+                        msg
+                    },
+                    Err(e) => {
+                        eprintln!("Failed to decrypt message: {}", e);
+                        results.send(false).expect("Failed to send test failure due to decryption");
                         break;
                     }
-                },
-                Err(e) => {
-                    match e {
-                        postcard::Error::DeserializeUnexpectedEnd => {
-                            // Loop again to get more data
-                            continue 'receive;
-                        },
-                        _ => {
-                            results.send(false).expect("Failed to send test failure");
-                            eprintln!("Error reading message: {}", e);
+                };
+
+                match from_bytes::<Payload>(&decrypted) {
+                    Ok(msg) => {
+                        if msg == expect_message {
+                            // Golden path
+                            results.send(true).expect("Failed to send test success");
+                            break;
+                        } else {
+                            // Bad deserialization
+                            eprintln!("Bad message. Got: \n{msg:?}\n expected: \n{expect_message:?}");
+                            results.send(false).expect("Failed to send test failure due to deserialization");
                             break;
                         }
+                    },
+                    Err(e) => {
+                        eprintln!("Error deserializing decrypted message: {}", e);
+                        results.send(false).expect("Failed to send test failure due to deserialization after decryption");
+                        break;
                     }
                 }
             }
@@ -331,4 +535,9 @@ mod test {
         )
     }
 
+    fn gen_shared_sessions(shared: [u8;32], conn_id: u64) -> (ActiveSession, ActiveSession) {
+        let sender_shared_session: ActiveSession = PendingSession::new(shared.clone(),Some(conn_id)).activate(None).expect("Failed to create shared test session");
+        let receiver_shared_session= PendingSession::new(shared,Some(conn_id)).activate(None).expect("Failed to create shared test session");
+        (sender_shared_session, receiver_shared_session)
+    }
 }

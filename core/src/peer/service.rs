@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-use crate::{utils::ChannelError, peer::{Peer, PeerId, PeerTableCmd, PeerTableDispatcher, PeerTableError}, service::Service};
+use crate::{peer::{Peer, PeerId, PeerTableCmd, PeerTableDispatcher, PeerTableError}, service::Service, utils::reply};
 
 const CHAN_SIZE: usize = 100;
 
@@ -30,8 +30,8 @@ impl Service for PeerTable {
                 _ = token.cancelled() => { return Ok(()); }
                 Some(cmd) = self.rx.recv() => {
                     match cmd {
-                        PeerTableCmd::GetAllIds { reply_tx } => reply_tx.send(self.peer_ids.clone()).map_err(|_| ChannelError::Closed)?,
-                        PeerTableCmd::GetPeer { peer_id, reply_tx } => reply_tx.send(self.peers.get(&peer_id).cloned()).map_err(|_| ChannelError::Closed)?,
+                        PeerTableCmd::GetAllIds { tx } => reply(tx, self.peer_ids.clone())?,
+                        PeerTableCmd::GetPeer { peer_id, tx } => reply(tx, self.peers.get(&peer_id).cloned())?,
                         PeerTableCmd::AddPeer { peer } => { self.peer_ids.push(peer.id); self.peers.insert(peer.id, peer); },
                     }
                 }

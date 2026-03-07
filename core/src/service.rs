@@ -3,7 +3,7 @@ use tokio::task::{JoinError, JoinHandle, JoinSet};
 use tokio_util::sync::CancellationToken;
 use std::future::Future;
 
-use crate::{client::ClientServiceError, dht::{DhtRoutingError, DhtStorageError}, node::NodeError, peer::PeerTableError, tag::TagServiceError, transport::MockTransportError, utils::ChannelError};
+use crate::{client::ClientServiceError, dht::{DhtRoutingError, DhtStorageError}, net::SessionManagerServiceError, node::NodeError, peer::PeerTableError, tag::TagServiceError, transport::MockTransportError, utils::ChannelError};
 
 #[derive(Debug, Error)]
 pub enum ServiceError {
@@ -33,6 +33,9 @@ pub enum ServiceError {
 
     #[error(transparent)]
     Node(#[from] NodeError),
+
+    #[error(transparent)]
+    NetSession(#[from] SessionManagerServiceError),
 }
 
 pub trait Service {

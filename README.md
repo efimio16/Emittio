@@ -1,6 +1,6 @@
 # <img src="assets/logo.png" alt="Emittio logo" style="height: 1em"/> Emittio
 
-*Anonymous, decentralized email. Powered by IPFS & end-to-end encryption.*
+*Anonymous, decentralized email. Powered by DHT & end-to-end encryption.*
 
 🌐 [Website](https://emittio.vercel.app/) | 📣 [Telegram](https://t.me/EmittioMail)
 

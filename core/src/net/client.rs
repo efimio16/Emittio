@@ -1,7 +1,7 @@
 use rand::{RngCore, SeedableRng, rngs::OsRng};
 use rand_chacha::ChaCha20Rng;
 use x25519_dalek::x25519;
-use crate::{net::{CryptoError, Handshake, HandshakeAck, NetIdentity, NetSession}, utils::{self, KyberPublicKey, KyberSecretKey}};
+use crate::{net::{CryptoError, Handshake, HandshakeAck, NetIdentity, PendingSession}, utils::{self, KyberPublicKey, KyberSecretKey}};
 
 #[derive(Clone)]
 pub enum NetClient {
@@ -27,7 +27,7 @@ impl NetClient {
             kb_pk: kb.public,
         }
     }
-    pub fn handshake(&self, to: NetIdentity) -> Result<([u8; 32], Handshake), CryptoError> {
+    pub fn handshake(&self, to: NetIdentity) -> Result<(PendingSession, Handshake), CryptoError> {
         let (
             x_sk,
             x_pk,
@@ -54,7 +54,7 @@ impl NetClient {
         shared[32..].copy_from_slice(&kb_shared);
 
         Ok((
-            utils::derive(&shared, b"shared"),
+            PendingSession::new(utils::derive(&shared, b"shared"), None),
             Handshake { from: NetIdentity { x_pk, kb_pk }, ct, created_conn_id: OsRng.next_u64() },
         ))
     }
@@ -66,7 +66,7 @@ impl NetClient {
         }
     }
 
-    pub fn accept(&self, handshake: Handshake) -> Result<(NetSession, HandshakeAck), CryptoError> {
+    pub fn accept(&self, handshake: Handshake) -> Result<(PendingSession, HandshakeAck), CryptoError> {
         let NetClient::Static { x_sk, kb_sk, .. } = self else {
             return Err(CryptoError::EphemeralClient);
         };
@@ -78,15 +78,9 @@ impl NetClient {
         shared[..32].copy_from_slice(&x_shared);
         shared[32..].copy_from_slice(&pqc_kyber::decapsulate(&handshake.ct, kb_sk)?);
 
-        let conn_id = OsRng.next_u64();
-
         Ok((
-            NetSession::new(utils::derive(&shared, b"shared"), handshake.created_conn_id),
-            HandshakeAck { conn_id: handshake.created_conn_id, created_conn_id: conn_id },
+            PendingSession::new(utils::derive(&shared, b"shared"), Some(handshake.created_conn_id)),
+            HandshakeAck { conn_id: handshake.created_conn_id, created_conn_id: OsRng.next_u64() },
         ))
-    }
-
-    pub fn session(&self, shared: [u8; 32], ack: HandshakeAck) -> NetSession {
-        NetSession::new(shared, ack.created_conn_id)
     }
 }

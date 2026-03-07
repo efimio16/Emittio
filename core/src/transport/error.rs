@@ -1,27 +1,18 @@
 use thiserror::Error;
 use tokio::task::JoinError;
 
-use crate::{net::{CryptoError, NetError}, utils::{ChannelError, SerdeError},peer::{PeerId}};
+use crate::{net::{SessionManagerDispatcherError,CryptoError,NetError}, utils::ChannelError};
 
 #[derive(Debug, Error)]
 pub enum MockTransportError {
     #[error(transparent)]
-    Serde(#[from] SerdeError),
-
-    #[error(transparent)]
     Channel(#[from] ChannelError),
 
     #[error(transparent)]
-    Crypto(#[from] CryptoError),
+    NetSession(#[from] SessionManagerDispatcherError),
 
-    #[error(transparent)]
-    Net(#[from] NetError),
-
-    #[error("client not found")]
-    ClientNotFound,
-
-    #[error("sessions not found")]
-    SessionsNotFound,
+    #[error("address not found")]
+    AddressNotFound,
 
     #[error("peer not found")]
     PeerNotFound,
@@ -36,8 +27,15 @@ pub enum TransportError {
     #[error("session not found")]
     SessionNotFound,
 
+    // Consider returning peer ID as data in this error
+    #[error("no sessions available")]
+    NoSessions,
+
     #[error("peer already connected")]
     PeerAlreadyConnected,
+
+    #[error("connection closed")]
+    ConnectionClosed,
 
     #[error(transparent)]
     Serialization(#[from] postcard::Error),
@@ -47,4 +45,10 @@ pub enum TransportError {
 
     #[error(transparent)]
     Join(#[from] JoinError),
+
+    #[error(transparent)]
+    Encrypt(#[from] CryptoError),
+
+    #[error(transparent)]
+    Decrypt(#[from] NetError),
 }

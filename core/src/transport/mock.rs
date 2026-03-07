@@ -2,14 +2,12 @@ use std::collections::HashMap;
 use tokio_stream::{StreamExt, StreamMap, wrappers::ReceiverStream};
 use tokio_util::sync::CancellationToken;
 
-use crate::{message::{IncomingMessage, OutgoingMessage}, net::{ConnId, NetClient, NetSession}, peer::{Peer, PeerId, PeerTableDispatcher}, service::Service, transport::{MockTransportError, TransportHandler, TransportParticipant}, utils::{ChannelError, deserialize, mock_peer_addr, serialize}};
+use crate::{net::{NetIdentity, SessionManagerDispatcher}, peer::{Peer, PeerTableDispatcher}, service::Service, transport::{MockTransportError, TransportHandler}, utils::{ChannelError, mock_peer_addr}};
 
 pub struct MockTransport {
     peer_table: PeerTableDispatcher,
-    clients: HashMap<String, NetClient>,
     handlers: HashMap<String, TransportHandler>,
-    sessions: HashMap<ConnId, (String, NetSession, PeerId)>,
-    connections: HashMap<String, HashMap<PeerId, ConnId>>,
+    clients: HashMap<String, SessionManagerDispatcher>,
 }
 
 impl MockTransport {
@@ -18,21 +16,17 @@ impl MockTransport {
             peer_table,
             clients: HashMap::new(),
             handlers: HashMap::new(),
-            sessions: HashMap::new(),
-            connections: HashMap::new(),
         }
     }
 
-    pub async fn add_participant(&mut self, participant: &impl TransportParticipant, handler: TransportHandler) -> Result<(), ChannelError> {
-        let client = participant.net_client();
+    pub async fn add_participant(&mut self, client: SessionManagerDispatcher, identity: Option<NetIdentity>, handler: TransportHandler) -> Result<(), ChannelError> {
         let address = mock_peer_addr();
 
-        if let Some(identity) = client.identity() {
+        if let Some(identity) = identity {
             self.peer_table.add_peer(Peer::new(identity, address.clone())).await?;
         }
         self.clients.insert(address.clone(), client);
         self.handlers.insert(address.clone(), handler);
-        self.connections.insert(address, HashMap::new());
 
         Ok(())
     }
@@ -40,7 +34,7 @@ impl MockTransport {
 
 impl Service for MockTransport {
     type Error = MockTransportError;
-    async fn run(mut self, token: CancellationToken) -> Result<(), MockTransportError> {
+    async fn run(self, token: CancellationToken) -> Result<(), MockTransportError> {
         println!("Running mock transport");
 
         let mut streams = StreamMap::new();
@@ -56,53 +50,36 @@ impl Service for MockTransport {
                 _ = token.cancelled() => { return Ok(()); }
                 Some((tx_addr, tx_msg)) = streams.next() => {
                     let rx_id = tx_msg.to;
+                    let tx_client = &self.clients[&tx_addr];
 
-                    let Some(tx_connections) = self.connections.get(&tx_addr) else { return Err(MockTransportError::SessionsNotFound); };
-
-                    let tx_conn = match tx_connections.get(&rx_id) {
-                        Some(v) => *v,
+                    let conn_id = match tx_client.connections(tx_msg.to).await?.get(0) {
+                        Some(&v) => v,
                         None => {
-                            let tx_client = &self.clients[&tx_addr];
-                            let Some(rx_peer) = self.peer_table.get_peer(rx_id).await? else { return Err(MockTransportError::PeerNotFound);};
+                            let Some(rx_peer) = self.peer_table.get_peer(rx_id).await? else { return Err(MockTransportError::PeerNotFound); };
                             let rx_addr = rx_peer.address;
+
+                            let handshake = tx_client.handshake(rx_peer.identity, rx_addr.clone()).await?;
 
                             let rx_client = &self.clients[&rx_addr];
 
-                            let (shared, handshake) = tx_client.handshake(rx_peer.identity)?;
-                            let (tx_new_conn_id, tx_id) = (handshake.created_conn_id, handshake.from.peer_id());
-                            let (rx_session, ack) = rx_client.accept(handshake)?;
-                            let rx_new_conn_id = ack.created_conn_id;
-                            let tx_session = tx_client.session(shared, ack);
+                            let ack = rx_client.accept(handshake, tx_addr.clone()).await?;
 
-                            {
-                                let Some(tx_connections) = self.connections.get_mut(&tx_addr) else { return Err(MockTransportError::SessionsNotFound); };
-                                tx_connections.insert(rx_id, tx_new_conn_id);
-                            }
-                            {
-                                let Some(rx_connections) = self.connections.get_mut(&rx_addr) else { return Err(MockTransportError::SessionsNotFound); };
-                                rx_connections.insert(tx_id, rx_new_conn_id);
-                            }
-
-                            self.sessions.insert(tx_new_conn_id, (tx_addr.clone(), tx_session, rx_id));
-                            self.sessions.insert(rx_new_conn_id, (rx_addr, rx_session, tx_id));
-
-                            tx_new_conn_id
-                        },
+                            let conn_id = tx_client.confirm(ack).await?;
+                            conn_id
+                        }
                     };
-
                     
-                    let Some((_, tx_session, _)) = self.sessions.get_mut(&tx_conn) else { return Err(MockTransportError::SessionsNotFound); };
-                    let msg = tx_session.send(&serialize(&tx_msg)?)?;
-                    
-                    let Some((rx_addr, rx_session, tx_id)) = self.sessions.get_mut(&msg.conn_id) else { panic!("continue"); };
-                    let rx_bytes = rx_session.receive(msg)?;
+                    let msg = tx_client.send(conn_id, tx_msg).await?;
 
-                    let Some(rx_handler) = rx_handlers.get(rx_addr) else { panic!("continue"); };
-                    let rx_msg: OutgoingMessage = deserialize(&rx_bytes)?;
+                    let Some(rx_addr) = tx_client.addr(rx_id).await? else { return Err(MockTransportError::AddressNotFound); };
+
+                    let rx_client = &self.clients[&rx_addr];
+
+                    let rx_msg = rx_client.recv(msg).await?;
 
                     println!("{} -> {}: {:#?}", tx_addr, rx_addr, rx_msg.payload);
 
-                    rx_handler.send(IncomingMessage::receive(*tx_id, rx_msg)).await.map_err(|_| ChannelError::Closed)?;
+                    rx_handlers[&rx_addr].send(rx_msg).await.map_err(|_| ChannelError::Closed)?;
                 }
             }
         }
@@ -115,19 +92,18 @@ mod tests {
     use tokio::time::timeout;
     use tokio_util::sync::CancellationToken;
 
-    use crate::{message::OutgoingMessage, net::NetClient, payload::{Payload, Reply, TagQuery}, peer::{PeerTable, PeerTableDispatcher}, service::Service, transport::{MockTransport, TransportHandler, TransportParticipant}, utils::random_bytes};
-
-    struct MockParticipant(pub NetClient);
-
-    impl TransportParticipant for MockParticipant {
-        fn net_client(&self) -> NetClient {
-            self.0.clone()
-        }
-    }
+    use crate::{message::OutgoingMessage, net::{NetClient, SessionManager, SessionManagerDispatcher}, payload::{Payload, Reply, TagQuery}, peer::{PeerTable, PeerTableDispatcher}, service::Service, transport::{MockTransport, TransportHandler}, utils::random_bytes};
 
     fn setup_peer_table() -> PeerTableDispatcher {
         let (service, dispatcher) = PeerTable::new();
         tokio::spawn(async { service.run(CancellationToken::new()).await.unwrap() });
+
+        dispatcher
+    }
+
+    fn setup_session_manager(client: NetClient) -> SessionManagerDispatcher {
+        let (dispatcher, service) = SessionManager::new(client);
+        tokio::spawn(service.run(CancellationToken::new()));
 
         dispatcher
     }
@@ -138,16 +114,20 @@ mod tests {
 
         let peer_table = setup_peer_table();
 
+        let bob_cl = NetClient::from_seed(random_bytes());
+        let bob_identity = bob_cl.identity().expect("bob should be static");
+        let bob_id = bob_identity.peer_id();
+
+        let alice_sessions = setup_session_manager(NetClient::Ephemeral);
+        let bob_sessions = setup_session_manager(bob_cl);
+
         let mut transport = MockTransport::new(peer_table);
 
         let (alice_handler, mut alice) = TransportHandler::new();
         let (bob_handler, mut bob) = TransportHandler::new();
 
-        let bob_cl = NetClient::from_seed(random_bytes());
-        let bob_id = bob_cl.identity().expect("bob should be static").peer_id();
-
-        transport.add_participant(&MockParticipant(NetClient::Ephemeral), alice_handler).await.expect("add participant failed");
-        transport.add_participant(&MockParticipant(bob_cl), bob_handler).await.expect("add participant failed");
+        transport.add_participant(alice_sessions, None, alice_handler).await.expect("add participant failed");
+        transport.add_participant(bob_sessions, Some(bob_identity), bob_handler).await.expect("add participant failed");
 
         tokio::spawn(async { transport.run(CancellationToken::new()).await.unwrap() });
 

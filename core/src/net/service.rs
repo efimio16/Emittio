@@ -1,7 +1,7 @@
 use tokio_util::sync::CancellationToken;
 use tokio::task::JoinError;
 use thiserror::Error;
-use crate::{net::{session::NetSession,error::{NetError,CryptoError}},message::{IncomingMessage,OutgoingMessage},payload::Payload,peer::{Peer,PeerId},utils::{SerdeError,ChannelError}, transport::{TransportError}};
+use crate::{net::{session::ActiveSession,error::{NetError,CryptoError}},message::{IncomingMessage,OutgoingMessage},payload::Payload,peer::{Peer,PeerId},utils::{SerdeError,ChannelError}, transport::{TransportError}};
 
 #[derive(Debug,Error)]
 pub enum NetServError {
@@ -47,7 +47,7 @@ pub trait NetService{
     // Add fully formed sessions to the service
     // Deal with handshakes prior to adding into service
     // Fail on adding a session if the peer already exists
-    fn add_session(&mut self, client: (Peer,NetSession)) -> impl Future<Output = Result<(), Self::Error>> + Send;
+    fn add_session(&mut self, client: (Peer,ActiveSession)) -> impl Future<Output = Result<(), Self::Error>> + Send;
     // It is possible that you'd want multiple sessions between two peers. Currently this would be an error. 
     // If not changed now, it will be hard to fix in the future.
 
@@ -55,13 +55,13 @@ pub trait NetService{
     fn drop_session(&mut self, peer: &PeerId) -> Result<(), Self::Error>;
 
     // Listen for incoming messages from all peers
-    fn listen(&self, token: CancellationToken) -> impl Future<Output = Result<IncomingMessage, Self::Error>> + Send;
+    fn listen(&mut self, token: CancellationToken) -> impl Future<Output = Result<IncomingMessage, Self::Error>> + Send;
 
     // Broadcast messages to all sessions
     // Responsible for encrypting for each peer
-    fn broadcast(&self, msg: Payload, token: CancellationToken) -> impl Future<Output = Result<(), Self::Error>> + Send;
+    fn broadcast(&mut self, msg: Payload, token: CancellationToken) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     // Transmit messages to a specific session
     // OutgoingMessage has its own PeerID
-    fn transmit(&self, msg: Payload,target: Peer, token: CancellationToken) -> impl Future<Output = Result<(), Self::Error>> + Send;
+    fn transmit(&mut self, msg: Payload,target: PeerId, token: CancellationToken) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }

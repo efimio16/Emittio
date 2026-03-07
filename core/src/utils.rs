@@ -2,6 +2,7 @@ use hkdf::Hkdf;
 use rand::{RngCore, rngs::OsRng, Rng, thread_rng, distributions::Alphanumeric};
 use serde::{Deserialize, Serialize};
 use sha2::{Sha256};
+use tokio::sync::oneshot;
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 use pqc_kyber::{KYBER_CIPHERTEXTBYTES, KYBER_PUBLICKEYBYTES, KYBER_SECRETKEYBYTES};
@@ -58,6 +59,16 @@ pub fn mock_peer_addr() -> String {
         .collect();
 
     format!("mock://{id}")
+}
+
+pub fn reply<T>(tx: oneshot::Sender<T>, data: T) -> Result<(), ChannelError> {
+    tx.send(data).map_err(|_| ChannelError::Closed)
+}
+pub fn reply_ok<T, E>(tx: oneshot::Sender<Result<T, E>>, ok: T) -> Result<(), ChannelError> {
+    tx.send(Ok(ok)).map_err(|_| ChannelError::Closed)
+}
+pub fn reply_err<T, E>(tx: oneshot::Sender<Result<T, E>>, err: impl Into<E>) -> Result<(), ChannelError> {
+    tx.send(Err(err.into())).map_err(|_| ChannelError::Closed)
 }
 
 pub(super) type KyberSecretKey = [u8; KYBER_SECRETKEYBYTES];
