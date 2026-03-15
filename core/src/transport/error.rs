@@ -1,7 +1,7 @@
 use thiserror::Error;
-use tokio::task::JoinError;
+use tokio::{task::JoinError,sync::mpsc::error::{SendError},net::tcp::OwnedReadHalf};
 
-use crate::{net::{SessionManagerDispatcherError,CryptoError,NetError}, utils::ChannelError};
+use crate::{net::{SessionManagerDispatcherError,CryptoError,NetError,Message}, utils::ChannelError,peer::{PeerId}};
 
 #[derive(Debug, Error)]
 pub enum MockTransportError {
@@ -20,25 +20,40 @@ pub enum MockTransportError {
 
 #[derive(Debug, Error)]
 pub enum TransportError {
+    // Make PeerId optional so that callers can add information without having to pass PeerId down to every function
+    #[error("session's read task has been cancelled")]
+    ReadCancelled(OwnedReadHalf,Option<PeerId>),
+    
     #[error("request was cancelled by token")]
     Cancelled,
 
     // Consider returning peer ID as data in this error
     #[error("session not found")]
-    SessionNotFound,
+    SessionNotFound(Option<PeerId>),
+
+    // Consider returning peer ID as data in this error
+    #[error("connection not found in active map")]
+    ConnectionNotInMap(Option<PeerId>),
 
     // Consider returning peer ID as data in this error
     #[error("no sessions available")]
     NoSessions,
 
+    // Consider returning peer ID as data in this error
+    #[error("message channel has been closed")]
+    MessageChannelClosed,
+
     #[error("peer already connected")]
-    PeerAlreadyConnected,
+    PeerAlreadyConnected(Option<PeerId>),
 
     #[error("connection closed")]
-    ConnectionClosed,
+    ConnectionClosed(Option<PeerId>),
 
     #[error(transparent)]
     Serialization(#[from] postcard::Error),
+
+    #[error(transparent)]
+    Reading(#[from] SendError::<(PeerId,Message)>),
 
     #[error(transparent)]
     IO(#[from] std::io::Error),

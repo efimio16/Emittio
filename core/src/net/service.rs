@@ -52,7 +52,7 @@ pub trait NetService{
     // If not changed now, it will be hard to fix in the future.
 
     // Close a session and drop it from the table
-    fn drop_session(&mut self, peer: &PeerId) -> Result<(), Self::Error>;
+    fn drop_session(&mut self, peer: &PeerId) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     // Listen for incoming messages from all peers
     fn listen(&mut self, token: CancellationToken) -> impl Future<Output = Result<IncomingMessage, Self::Error>> + Send;
