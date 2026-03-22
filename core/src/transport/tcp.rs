@@ -4,6 +4,8 @@ use tokio::{net::{TcpStream, TcpListener, ToSocketAddrs, tcp::{OwnedReadHalf, Ow
 
 use std::{collections::HashMap};
 
+use bytes::BytesMut;
+
 use postcard::{to_stdvec,take_from_bytes,from_bytes};
 
 use crate::{net::{ActiveSession, PendingSession, NetClient,NetService,Message},payload::{Payload}, transport::TransportError, peer::{Peer,PeerId}, message::{IncomingMessage,OutgoingMessage}};
@@ -40,10 +42,10 @@ impl TcpTransport {
     }
 }
 
-async fn read_from_stream(stream: &mut OwnedReadHalf) -> Result<Vec<u8>, TransportError> {
+async fn read_from_stream(stream: &mut OwnedReadHalf) -> Result<BytesMut, TransportError> {
     let res = loop {
         stream.readable().await?;
-        let mut buf = Vec::with_capacity(BUFSIZE);
+        let mut buf = BytesMut::with_capacity(BUFSIZE);
         let res = stream.read_buf(&mut buf).await;
         match res {
             Ok(0) => {
@@ -60,7 +62,7 @@ async fn read_from_stream(stream: &mut OwnedReadHalf) -> Result<Vec<u8>, Transpo
 }
 
 async fn read_message(stream: &mut OwnedReadHalf,id: PeerId, results: &Sender::<(PeerId,Message)>) -> Result<(), TransportError> {
-    let mut msg_buf = vec!();
+    let mut msg_buf = BytesMut::with_capacity(BUFSIZE);
     loop {
         let data = read_from_stream(stream).await.map_err(|e| {
             match e {
@@ -75,7 +77,7 @@ async fn read_message(stream: &mut OwnedReadHalf,id: PeerId, results: &Sender::<
         let rem = match take_from_bytes::<Message>(&msg_buf) {
             Ok((msg,rem)) => {
                 results.send((id,msg)).await?;
-                rem.to_owned()
+                BytesMut::from(rem)
             },
             Err(e) => {
                 match e {
@@ -87,6 +89,8 @@ async fn read_message(stream: &mut OwnedReadHalf,id: PeerId, results: &Sender::<
                 }
             }
         };
+        // take_from_bytes cannot mutate data so msg_buf will still contain the used + remaining bytes
+        // replace it with the remaining bytes
         msg_buf = rem;
     }
 }
@@ -252,11 +256,11 @@ mod test {
     async fn test_bind() {
         // This test needs to use concrete addresses (non port 0) to check it fails correctly
         let client = NetClient::Ephemeral;
-        let addr = "127.0.0.1:80";
+        let addr = "127.0.0.1:30000";
         let transport = TcpTransport::bind(client, addr).await;
         
         let static_client = NetClient::from_seed([1u8; 32]);
-        let addr = "127.0.0.1:8080";
+        let addr = "127.0.0.1:30030";
         let transport_2 = TcpTransport::bind(static_client, addr).await;
         
         let client = NetClient::from_seed([1u8; 32]);
