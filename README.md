@@ -81,9 +81,9 @@ If you are interested in:
 
 you can contact us at [emittio@proton.me](mailto:emittio@proton.me).
 
-## 👥 Contributors
+## 👥 Team
 
-Thanks to everyone who contributed to this project! 🌟
+Thanks to everyone who contributed to this project!
 
 - [@mikeyoung3k](https://github.com/mikeyoung3k)
 
