@@ -1,0 +1,21 @@
+[workspace.package]
+name = "Emittio"
+version = "0.1.0"
+description = "Decentralized anonymous mail"
+authors = ["efimio16"]
+license = "GPL-3.0"
+repository = "https://github.com/efimio16/Emittio"
+homepage = "https://emittio.vercel.app/"
+readme = "README.md"
+
+[workspace]
+resolver = "3"
+members = [
+    # "crates/client",
+    "crates/crypto",
+    # "crates/dht",
+    "crates/net",
+    # "crates/node",
+    # "crates/peer",
+    # "crates/service"
+]

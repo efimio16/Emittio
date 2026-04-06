@@ -1,0 +1,19 @@
+[package]
+name = "net"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bytes = "1.11.1"
+crypto = { version = "0.1.0", path = "../crypto" }
+postcard = { version = "1.0", features = ["alloc", "use-std"] }
+rand = "0.8.5"
+serde = "1.0.228"
+serde-big-array = "0.5.1"
+thiserror = "2.0.18"
+tokio = { version="1.48.0", features=["io-util", "macros"], optional=true }
+tokio-util = { version = "0.7.17", features = ["join-map", "rt"] }
+
+[features]
+default = []
+tcp = ["tokio/net"]
