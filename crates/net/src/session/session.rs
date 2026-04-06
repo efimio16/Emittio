@@ -78,7 +78,7 @@ impl ActiveSession {
         aad
     }
 
-    pub fn send(&mut self, plaintext: &Vec<u8>) -> Result<Message, CryptoError> {
+    pub fn send(&mut self, plaintext: &[u8]) -> Result<Message, CryptoError> {
         self.seq += 1;
 
         let cipher = self.cipher();
