@@ -10,13 +10,13 @@ pub use test::*;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum Payload {
     Query(Query),
     Reply(Reply),
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum Query {
     // Pow(PowQuery),
     // Tag(TagQuery),
@@ -24,7 +24,7 @@ pub enum Query {
     Mock(TestQuery),
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum Reply {
     // Empty,
     // Ok,
