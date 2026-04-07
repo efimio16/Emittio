@@ -11,7 +11,7 @@ rand = "0.8.5"
 serde = "1.0.228"
 serde-big-array = "0.5.1"
 thiserror = "2.0.18"
-tokio = { version="1.48.0", features=["io-util", "macros"], optional=true }
+tokio = { version="1.48.0", features=["io-util", "macros"] }
 tokio-util = { version = "0.7.17", features = ["join-map", "rt"] }
 
 [features]
