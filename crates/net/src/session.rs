@@ -1,16 +1,10 @@
 use bytes::Bytes;
 use crypto::{blake3, ciphertext::{Ciphertext, Nonce}, id::Id, kem::{SecretKey, SharedSecret}};
 
-use crate::{error::NetError, packet::Message};
+use crate::{error::NetError, packet::WireMessage};
 
 const WINDOW: usize = 32;
 const VERSION: u8 = 1;
-
-pub struct WireMessage { // TODO: Move it to the packet.rs
-    seq: u64,
-    session_id: SessionId,
-    ciphertext: Ciphertext,
-}
 
 pub type SessionId = Id;
 
@@ -83,7 +77,7 @@ impl ActiveSession {
         Ok(WireMessage { seq: self.seq, ciphertext, session_id: self.session_id.clone() })
     }
 
-    pub fn recv(&mut self, msg: Message) -> Result<Bytes, NetError> {
+    pub fn recv(&mut self, msg: WireMessage) -> Result<Bytes, NetError> {
         if !self.check_seq(msg.seq) {
             return Err(NetError::InvalidSeq);
         }
