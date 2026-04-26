@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use tokio::sync::mpsc;
 use tokio_util::task::JoinMap;
 
-use crate::{error::NetError, message::MsgId, packet::{ConnId, Message, Packet}, peer::PeerId, session::{ActiveSession, EphemeralState, PendingSession, SessionId}};
+use crate::{error::NetError, message::MsgId, packet::{ConnId, WireMessage, Packet}, peer::PeerId, session::{ActiveSession, EphemeralState, PendingSession, SessionId}};
 
 struct NetworkManager {
     sessions_by_peer: HashMap<PeerId, HashSet<SessionId>>,
@@ -10,7 +10,7 @@ struct NetworkManager {
     active_sessions: HashMap<SessionId, ActiveSession>,
     pending_sessions: HashMap<SessionId, PendingSession>,
     ephemeral_states: HashMap<PeerId, EphemeralState>,
-    message_callbacks: HashMap<(SessionId, MsgId), mpsc::Sender<Message>>,
+    message_callbacks: HashMap<(SessionId, MsgId), mpsc::Sender<WireMessage>>,
     ttl_sessions: HashMap<u64, SessionId>,
 
     conns_by_peer: HashMap<PeerId, HashSet<ConnId>>,
