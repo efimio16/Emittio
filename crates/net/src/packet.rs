@@ -31,5 +31,5 @@ pub type SessionId = Id;
 pub enum Packet {
     Handshake(Handshake),
     HandshakeAck(HandshakeAck),
-    Message(WireMessage),
+    WireMessage(WireMessage),
 }

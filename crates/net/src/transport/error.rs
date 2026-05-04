@@ -2,7 +2,7 @@ use crypto::{error::CryptoError, id::Id};
 use thiserror::Error;
 use tokio::{net::tcp::OwnedReadHalf, sync::mpsc::error::SendError, task::JoinError};
 
-use crate::{error::NetError, packet::Message};
+use crate::{error::NetError, packet::WireMessage};
 
 // use crate::{net::SessionManagerDispatcherError, utils::ChannelError};
 
@@ -56,7 +56,7 @@ pub enum TransportError {
     Serialization(#[from] postcard::Error),
 
     #[error(transparent)]
-    Reading(#[from] SendError::<(Id,Message)>),
+    Reading(#[from] SendError::<(Id,WireMessage)>),
 
     #[error(transparent)]
     IO(#[from] std::io::Error),
