@@ -2,7 +2,7 @@ use crypto::{error::CryptoError, id::Id};
 use tokio_util::sync::CancellationToken;
 use tokio::task::JoinError;
 use thiserror::Error;
-use crate::{/*net::session::ActiveSession, */error::NetError,message::IncomingMessage,payload::Payload,peer::Peer,/*utils::{SerdeError,ChannelError}, */transport::error::TransportError};
+use crate::{/*net::session::ActiveSession, */error::NetError,message::Message,payload::Payload,peer::Peer,/*utils::{SerdeError,ChannelError}, */transport::error::TransportError};
 
 #[derive(Debug,Error)]
 pub enum NetServError {
@@ -56,13 +56,12 @@ pub trait NetService{
     fn drop_session(&mut self, peer: &Id) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     // Listen for incoming messages from all peers
-    fn listen(&mut self, token: CancellationToken) -> impl Future<Output = Result<IncomingMessage, Self::Error>> + Send;
+    fn listen(&mut self, token: CancellationToken) -> impl Future<Output = Result<Message, Self::Error>> + Send;
 
     // Broadcast messages to all sessions
     // Responsible for encrypting for each peer
     fn broadcast(&mut self, msg: Payload, token: CancellationToken) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     // Transmit messages to a specific session
-    // OutgoingMessage has its own PeerID
     fn transmit(&mut self, msg: Payload,target: Id, token: CancellationToken) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }

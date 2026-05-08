@@ -7,50 +7,100 @@ use crate::{payload::{Payload, Query, Reply}};
 pub type MsgId = u64;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub struct IncomingMessage {
+pub struct Message {
+    pub id: MsgId,
     pub from: Id,
     pub payload: Payload,
-    pub id: MsgId,
-}
-
-impl IncomingMessage {
-    pub fn receive(from: Id, msg: OutgoingMessage) -> Self {
-        Self { from, payload: msg.payload, id: msg.id }
-    }
-    pub fn reply(self, reply: Reply) -> OutgoingMessage {
-        OutgoingMessage { to: self.from, payload: Payload::Reply(reply), id: self.id }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub struct OutgoingMessage {
     pub to: Id,
-    pub payload: Payload,
-    pub id: MsgId,
 }
 
-impl OutgoingMessage {
-    pub fn new(to: &Id, payload: Payload) -> Self {
-        Self { to: to.clone(), payload, id: OsRng.next_u64() }
+impl Message {
+
+    pub fn new(from: &Id, to: &Id, payload: Payload) -> Self {
+        Message{
+            from: from.clone(),
+            id: OsRng.next_u64(),
+            payload,
+            to: to.clone(),
+        }
     }
-    pub fn query(to: &Id, q: impl Into<Query>) -> Self {
-        Self::new(to, Payload::Query(q.into()))
+    pub fn query(from: &Id, to: &Id, q: impl Into<Query>) -> Self {
+        Self::new(from, to, Payload::Query(q.into()))
     }
-    pub fn reply(to: &Id, r: impl Into<Reply>) -> Self {
-        Self::new(to, Payload::Reply(r.into()))
+
+    pub fn reply(&self, reply: impl Into<Reply>) -> Self {
+        // At the moment I think it only makes sense to reply to an existing message
+        // I don't think we need to consume the original message - but that's up for debate
+        Self { from: self.to.clone(), to: self.from.clone(), payload: Payload::Reply(reply.into()), id: self.id }
     }
 }
 
-pub struct OutgoingMessageBuilder {
-    to: Id,
-    id: MsgId,
-}
+#[cfg(test)]
+mod test{
+    use super::*;
+    use crate::payload::{TestQuery,TestReply};
 
-impl OutgoingMessageBuilder {
-    pub fn new(incoming: &IncomingMessage) -> Self {
-        Self { to: incoming.from.clone(), id: incoming.id }
+    #[test]
+    fn new_message() {
+        let alice = Id::new([0u8; 32]);
+        let bob = Id::new([1u8; 32]);
+        let payload = Payload::Query(Query::Mock(TestQuery::Ping));
+        let expect = Message{
+            from: alice.clone(),
+            id: 1234567890,
+            payload: payload.clone(),
+            to: bob.clone(),
+        };
+
+        let got = Message::new(&alice, &bob, payload);
+
+        // ID is assigned randomly so can't compare structs directly
+        assert_eq!(expect.from,got.from,"From should match");
+        assert_eq!(expect.to,got.to,"To should match");
+        assert_eq!(expect.payload,got.payload,"Payload should match");
     }
-    pub fn reply(self, reply: Reply) -> OutgoingMessage {
-        OutgoingMessage { to: self.to, payload: Payload::Reply(reply), id: self.id }
+
+    #[test]
+    fn test_query() {
+        let alice = Id::new([0u8; 32]);
+        let bob = Id::new([1u8; 32]);
+        let payload = Payload::Query(Query::Mock(TestQuery::Ping));
+        let expect = Message{
+            from: alice.clone(),
+            id: 1234567890,
+            payload: payload.clone(),
+            to: bob.clone(),
+        };
+
+        let got = Message::new(&alice, &bob, payload);
+
+        // ID is assigned randomly so can't compare structs directly
+        assert_eq!(expect.from,got.from,"From should match");
+        assert_eq!(expect.to,got.to,"To should match");
+        assert_eq!(expect.payload,got.payload,"Payload should match");
+    }
+
+    #[test]
+    fn test_reply() {
+        let alice = Id::new([0u8; 32]);
+        let bob = Id::new([1u8; 32]);
+        let payload = Payload::Query(Query::Mock(TestQuery::Ping));
+        let message = Message{
+            from: alice.clone(),
+            id: 1234567890,
+            payload,
+            to: bob.clone(),
+        };
+
+        let expect = Message {
+            from: bob.clone(),
+            id: 1234567890,
+            payload: Payload::Reply(Reply::Mock(TestReply::Pong)),
+            to: alice.clone(),
+        };
+
+        // ID should match so we can compare directly
+        let got = message.reply(Reply::Mock(TestReply::Pong));
+        assert_eq!(expect,got,"Reply should match");
     }
 }

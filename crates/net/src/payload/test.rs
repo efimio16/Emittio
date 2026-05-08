@@ -2,12 +2,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::payload::{Query, Reply};
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum TestQuery {
     Ping,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum TestReply {
     Pong,
 }

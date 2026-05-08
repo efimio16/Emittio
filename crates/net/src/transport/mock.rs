@@ -92,7 +92,7 @@ mod tests {
     use tokio::time::timeout;
     use tokio_util::sync::CancellationToken;
 
-    use crate::{message::OutgoingMessage, net::{NetClient, SessionManager, SessionManagerDispatcher}, payload::{Payload, Reply, TagQuery}, peer::{PeerTable, PeerTableDispatcher}, service::Service, transport::{MockTransport, TransportHandler}, utils::random_bytes};
+    use crate::{message::Message, net::{NetClient, SessionManager, SessionManagerDispatcher}, payload::{Payload, Reply, TagQuery}, peer::{PeerTable, PeerTableDispatcher}, service::Service, transport::{MockTransport, TransportHandler}, utils::random_bytes};
 
     fn setup_peer_table() -> PeerTableDispatcher {
         let (service, dispatcher) = PeerTable::new();
@@ -126,12 +126,15 @@ mod tests {
         let (alice_handler, mut alice) = TransportHandler::new();
         let (bob_handler, mut bob) = TransportHandler::new();
 
+        // Alice needs an ID for Bob to be able to reply back
+        // TODO - NetIdentity has been removed. In favour of crypto::id?
+        // let alice_id = Id::new([0u8;32]);
         transport.add_participant(alice_sessions, None, alice_handler).await.expect("add participant failed");
         transport.add_participant(bob_sessions, Some(bob_identity), bob_handler).await.expect("add participant failed");
 
         tokio::spawn(async { transport.run(CancellationToken::new()).await.unwrap() });
 
-        alice.send(OutgoingMessage::query(&bob_id, TagQuery::Get)).await.expect("alice query failed");
+        alice.send(Message::query(&alice_id,&bob_id, TagQuery::Get)).await.expect("alice query failed");
 
         let incoming = timeout(TIMEOUT, bob.recv()).await.expect("timeout").expect("channel should not be closed");
 

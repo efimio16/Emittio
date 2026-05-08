@@ -9,7 +9,7 @@ use bytes::BytesMut;
 use postcard::{to_stdvec,take_from_bytes,from_bytes};
 
 use crypto::id::Id;
-use crate::{/*net::{ActiveSession, PendingSession, NetClient},*/ message::{IncomingMessage,OutgoingMessage}, packet::Message, payload::Payload, peer::Peer, service::NetService, transport::error::TransportError};
+use crate::{/*net::{ActiveSession, PendingSession, NetClient},*/ message::{Message}, packet::Message, payload::Payload, peer::Peer, service::NetService, transport::error::TransportError};
 
 const CHANNELSIZE: usize = 128;
 // Max message len current 226
@@ -141,7 +141,7 @@ impl NetService for TcpTransport {
         Ok(())
     }
 
-    async fn listen(&mut self, token: CancellationToken) -> Result<IncomingMessage, Self::Error> {
+    async fn listen(&mut self, token: CancellationToken) -> Result<Message, Self::Error> {
         loop {
             tokio::select!{
                 _ = token.cancelled() => { return Err(TransportError::Cancelled); },
@@ -176,8 +176,7 @@ impl NetService for TcpTransport {
                     if let Some((id,encrypted)) = msg {
                         let session = self.sessions.get_mut(&id).ok_or(TransportError::SessionNotFound(Some(id)))?;
                         let decrypted = session.receive(encrypted)?;
-                        let outgoing = from_bytes::<OutgoingMessage>(&decrypted)?;
-                        return Ok(IncomingMessage::receive(id, outgoing))
+                        return Ok(from_bytes::<Message>(&decrypted)?);
                     } else {
                         // Channel has been closed
                         return Err(TransportError::MessageChannelClosed)
@@ -232,7 +231,7 @@ impl NetService for TcpTransport {
 #[cfg(test)]
 mod test {    
     use super::*;
-    use crate::{message::OutgoingMessage,payload::{Action, Query, Reply, TagQuery}, pow::Pow, tag::{Tag,TagPayload}};
+    use crate::{message::Message,payload::{Action, Query, Reply, TagQuery}, pow::Pow, tag::{Tag,TagPayload}};
     use std::{io::Write, sync::mpsc::{Sender, channel}};
     use tokio::time::timeout;
     use std::{time::{Duration}};
@@ -420,15 +419,17 @@ mod test {
             let peer = Peer::new(client.identity().expect("Expect static ID"), addr.to_string());
             
             expect_messages.push(
-                IncomingMessage{
+                Message{
+                    to: transport.client.identity().expect("Expected an ID").peer_id(),
                     from: peer.id.clone(),
                     payload: msg.clone(),
                     id: 0,
                 }
             );
             
-            let send_message = OutgoingMessage{
+            let send_message = Message{
                 to: transport.client.identity().expect("Expected an ID").peer_id(),
+                from: peer.id.clone(),
                 payload: msg.clone(),
                 id: 0,
             };
