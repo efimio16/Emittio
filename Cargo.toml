@@ -17,5 +17,5 @@ members = [
     "crates/net",
     # "crates/node",
     # "crates/peer",
-    # "crates/service"
+    "crates/service"
 ]

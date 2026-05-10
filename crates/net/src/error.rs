@@ -2,7 +2,7 @@ use crypto::error::CryptoError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum NetError {
+pub enum NetworkError {
     #[error(transparent)]
     Crypto(#[from] CryptoError),
 

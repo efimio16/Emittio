@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use crypto::{blake3, ciphertext::{Ciphertext, Nonce}, id::Id, kem::{SecretKey, SharedSecret}};
 
-use crate::{error::NetError, packet::WireMessage};
+use crate::{error::NetworkError, packet::WireMessage};
 
 const WINDOW: usize = 32;
 const VERSION: u8 = 1;
@@ -69,7 +69,7 @@ impl ActiveSession {
         true
     }
 
-    pub fn send(&mut self, plaintext: &[u8]) -> Result<WireMessage, NetError> { // WireMessage
+    pub fn send(&mut self, plaintext: &[u8]) -> Result<WireMessage, NetworkError> { // WireMessage
         self.seq += 1;
 
         let ciphertext = Ciphertext::encrypt(&self.shared, plaintext, self.nonce(), &self.aad())?;
@@ -77,9 +77,9 @@ impl ActiveSession {
         Ok(WireMessage { seq: self.seq, ciphertext, session_id: self.session_id.clone() })
     }
 
-    pub fn recv(&mut self, msg: WireMessage) -> Result<Bytes, NetError> {
+    pub fn recv(&mut self, msg: WireMessage) -> Result<Bytes, NetworkError> {
         if !self.check_seq(msg.seq) {
-            return Err(NetError::InvalidSeq);
+            return Err(NetworkError::InvalidSeq);
         }
 
         let plaintext = msg.ciphertext.decrypt(self.shared, &self.aad())?;
