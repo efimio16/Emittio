@@ -1,4 +1,5 @@
 use crypto::error::CryptoError;
+use service::channel::ChannelError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -9,6 +10,9 @@ pub enum NetworkError {
     #[error("invalid seq")]
     InvalidSeq,
 
-    #[error("ephemeral client cannot accept handshakes or have static identity")]
-    EphemeralClient,
+    #[error(transparent)]
+    Channel(#[from] ChannelError),
+
+    #[error(transparent)]
+    Postcard(#[from] postcard::Error),
 }

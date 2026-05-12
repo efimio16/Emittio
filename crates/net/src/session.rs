@@ -1,41 +1,24 @@
 use bytes::Bytes;
-use crypto::{blake3, ciphertext::{Ciphertext, Nonce}, id::Id, kem::{SecretKey, SharedSecret}};
+use crypto::{blake3, ciphertext::{Ciphertext, Nonce}, kem::SharedSecret};
 
 use crate::{error::NetworkError, packet::WireMessage};
 
 const WINDOW: usize = 32;
 const VERSION: u8 = 1;
 
-pub type SessionId = Id;
-
-pub struct PendingSession(SharedSecret);
-
-impl PendingSession {
-    #[inline]
-    pub fn new(shared: SharedSecret) -> Self {
-        Self(shared)
-    }
-    pub fn activate(self) -> ActiveSession {
-        ActiveSession::new(self.0, false)
-    }
-}
-
-pub type EphemeralState = SecretKey;
-
-pub struct ActiveSession {
+pub struct Session {
     shared: SharedSecret,
-    session_id: SessionId,
+    // session_id: SessionId,
     last_seen: u64,
     bitmap: u32,
     seq: u64,
     initiator: bool,
 }
 
-impl ActiveSession {
+impl Session {
     #[inline]
     pub fn new(shared: SharedSecret, initiator: bool) -> Self {
-        let session_id = SessionId::from(&shared as &[u8]);
-        Self { shared, session_id, last_seen: 0, bitmap: 0, seq: 0, initiator }
+        Self { shared, last_seen: 0, bitmap: 0, seq: 0, initiator }
     }
     #[inline]
     fn check_seq(&mut self, seq: u64) -> bool {
@@ -74,7 +57,8 @@ impl ActiveSession {
 
         let ciphertext = Ciphertext::encrypt(&self.shared, plaintext, self.nonce(), &self.aad())?;
 
-        Ok(WireMessage { seq: self.seq, ciphertext, session_id: self.session_id.clone() })
+        Ok(WireMessage { seq: self.seq, ciphertext })
+        // Ok(WireMessage { seq: self.seq, ciphertext, session_id: self.session_id.clone() })
     }
 
     pub fn recv(&mut self, msg: WireMessage) -> Result<Bytes, NetworkError> {
@@ -111,8 +95,7 @@ impl ActiveSession {
     fn aad(&self) -> [u8; 41] {
         let mut aad = [0u8; 41];
         aad[0] = VERSION;
-        aad[1..33].copy_from_slice(&self.session_id.as_bytes());
-        aad[33..41].copy_from_slice(&self.seq.to_be_bytes());
+        aad[1..9].copy_from_slice(&self.seq.to_be_bytes());
         aad
     }
 }
