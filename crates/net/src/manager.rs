@@ -86,31 +86,37 @@ impl NetworkService {
 
     // TODO: change &Peer to PeerId when node manager will be implemented
     async fn select_session(&mut self, peer: &Peer) -> Result<&mut Session, NetworkError> {
-        if !self.one_rtt_sessions.contains_key(&peer.id) {
-            let session = if let Some(state) = self.one_rtt_resp_states.remove(&peer.id) {
-                Session::new(state, false)
-            } else {
-                let keypair = Kem::random();
-
-                let (capsule, shared) = keypair.sk.shared(&peer.pk)?;
-
-                self.one_rtt_init_states.insert(peer.id.clone(), keypair.sk);
-
-                let handshake = Handshake {
-                    pk: keypair.pk,
-                    capsule,
-                };
-
-                let conn = self.select_connection(peer).await?;
-                channel::send(&conn, Packet::Handshake(handshake)).await?;
-
-                Session::new(shared, true)
-            };
+        let session = if self.one_rtt_sessions.contains_key(&peer.id) {
+            self.one_rtt_sessions.get_mut(&peer.id).unwrap()
+        } else if let Some(state) = self.one_rtt_resp_states.remove(&peer.id) {
+            let session = Session::new(state, false);
 
             self.one_rtt_sessions.insert(peer.id.clone(), session);
-        }
+            self.one_rtt_sessions.get_mut(&peer.id).unwrap()
+        } else if self.zero_rtt_sessions.contains_key(&peer.id) {
+            self.zero_rtt_sessions.get_mut(&peer.id).unwrap()
+        } else {
+            let keypair = Kem::random();
 
-        Ok(self.one_rtt_sessions.get_mut(&peer.id).unwrap())
+            let (capsule, shared) = keypair.sk.shared(&peer.pk)?;
+
+            self.one_rtt_init_states.insert(peer.id.clone(), keypair.sk);
+
+            let handshake = Handshake {
+                pk: keypair.pk,
+                capsule,
+            };
+
+            let conn = self.select_connection(peer).await?;
+            channel::send(&conn, Packet::Handshake(handshake)).await?;
+
+            let session = Session::new(shared, true);
+
+            self.zero_rtt_sessions.insert(peer.id.clone(), session);
+            self.zero_rtt_sessions.get_mut(&peer.id).unwrap()
+        };
+
+        Ok(session)
     }
 
     // TODO: change &Peer to PeerId when node manager will be implemented
