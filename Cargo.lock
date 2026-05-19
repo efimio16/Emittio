@@ -3,6 +3,27 @@
 version = 4
 
 [[package]]
+name = "actor"
+version = "0.1.0"
+dependencies = [
+ "actor-macro",
+ "futures",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
+name = "actor-macro"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+ "tokio",
+]
+
+[[package]]
 name = "aead"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -172,6 +193,7 @@ dependencies = [
  "blake3",
  "bytes",
  "ed25519-dalek",
+ "postcard",
  "pqc_dilithium_edit",
  "pqc_kyber",
  "rand",
@@ -287,6 +309,10 @@ name = "embedded-io"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
+
+[[package]]
+name = "event"
+version = "0.1.0"
 
 [[package]]
 name = "fiat-crypto"
@@ -479,6 +505,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 
 [[package]]
+name = "message"
+version = "0.1.0"
+dependencies = [
+ "crypto",
+]
+
+[[package]]
 name = "mio"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -493,13 +526,13 @@ dependencies = [
 name = "net"
 version = "0.1.0"
 dependencies = [
+ "actor",
  "bytes",
  "crypto",
  "postcard",
  "rand",
  "serde",
  "serde-big-array",
- "service",
  "thiserror",
  "tokio",
  "tokio-util",
@@ -525,6 +558,14 @@ checksum = "f950b2377845cebe5cf8b5165cb3cc1a5e0fa5cfa3e1f7f55707d8fd82e0a7b7"
 dependencies = [
  "der",
  "spki",
+]
+
+[[package]]
+name = "pointer"
+version = "0.1.0"
+dependencies = [
+ "crypto",
+ "net",
 ]
 
 [[package]]
@@ -685,16 +726,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "service"
-version = "0.1.0"
-dependencies = [
- "futures",
- "thiserror",
- "tokio",
- "tokio-util",
 ]
 
 [[package]]

@@ -1,5 +1,5 @@
 use crypto::error::CryptoError;
-use service::channel::ChannelError;
+use actor::channel::ChannelError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]

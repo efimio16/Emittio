@@ -1,13 +1,13 @@
 pub mod channel;
 
-// use tokio::task::{JoinError, JoinHandle, JoinSet};
-use tokio_util::sync::CancellationToken;
-// use std::{future::Future, sync::mpsc};
-
-// use crate::{client::ClientServiceError, dht::{DhtRoutingError, DhtStorageError}, net::SessionManagerServiceError, node::NodeError, peer::PeerTableError, tag::TagServiceError, transport::MockTransportError, utils::ChannelError};
+pub use tokio_util::sync::CancellationToken;
+pub use tokio::{sync::{mpsc, oneshot}, select};
+pub use actor_macro::actor;
 
 // I don't think we'll need a dynamic orchestration of services,
 // so let's try without this enum but keeping it just in case
+
+// use crate::{client::ClientServiceError, dht::{DhtRoutingError, DhtStorageError}, net::SessionManagerServiceError, node::NodeError, peer::PeerTableError, tag::TagServiceError, transport::MockTransportError, utils::ChannelError};
 
 // #[derive(Debug, Error)]
 // pub enum ServiceError {
@@ -75,51 +75,5 @@ use tokio_util::sync::CancellationToken;
 // }
 
 pub trait Service {
-    type Error;
-    fn run(self, token: CancellationToken) -> impl Future<Output = Result<(), Self::Error>> + Send;
-}
-
-#[macro_export]
-macro_rules! commands {
-    (
-        $cmd:ident,
-        $dispatcher:ident,
-        $(
-            $fn_name:ident
-            => $name:ident {
-                $( $field_name:ident : $field_type:ty ),* $(,)?
-            }
-            -> $out:ty
-        ),* $(,)?
-    ) => {
-        pub enum $cmd {
-            $( $name {
-                $( $field_name:$field_type, )*
-                reply_tx: tokio::sync::oneshot::Sender<$out>
-            } ),*
-        }
-
-        #[derive(Clone)]
-        pub struct $dispatcher {
-            tx: tokio::sync::mpsc::Sender<$cmd>
-        }
-
-        impl $dispatcher {
-            $(
-                async fn $fn_name(&self, $( $field_name:$field_type ),*) -> Result<$out, $crate::channel::ChannelError> {
-                    let (tx, rx) = $crate::channel::create_oneshot();
-
-                    $crate::channel::send(
-                        &self.tx,
-                        $cmd::$name {
-                            $( $field_name, )*
-                            reply_tx: tx,
-                        }
-                    ).await?;
-
-                    Ok(rx.await?)
-                }
-            ),*
-        }
-    };
+    fn run(self, token: CancellationToken) -> impl Future<Output = Result<(), channel::ChannelError>> + Send;
 }

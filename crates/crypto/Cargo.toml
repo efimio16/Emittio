@@ -10,6 +10,7 @@ aes-gcm = { version="0.10.3", features=["std"] }
 blake3 = "1.8.3"
 bytes = { version="1.11.1", features=["serde"] }
 ed25519-dalek = { version="2.2.0", features=["rand_core", "serde"] }
+postcard = "1.1.3"
 pqc_dilithium_edit = "0.2.0"
 pqc_kyber = { version = "0.7.1", features = ["std", "kyber512"] }
 rand = "0.8.5"

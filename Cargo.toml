@@ -12,10 +12,12 @@ readme = "README.md"
 resolver = "3"
 members = [
     # "crates/client",
-    "crates/crypto",
+    "crates/crypto", "crates/event",
+    "crates/message",
     # "crates/dht",
-    "crates/net",
+    "crates/net", "crates/pointer",
     # "crates/node",
     # "crates/peer",
-    "crates/service"
+    "crates/actor",
+    "crates/actor-macro"
 ]
