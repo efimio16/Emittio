@@ -1,4 +1,4 @@
-use crypto::{sealed::Sealed, kem::PublicKey};
+use crypto::{ciphertext::Sealed, kem::PublicKey};
 
 pub struct InternalPointerHeader {
     pk: [u8; 32],

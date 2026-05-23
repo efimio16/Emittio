@@ -17,9 +17,11 @@ pub struct Kem {
 
 impl Kem {
     pub fn from_seed(seed: [u8; 32]) -> Self {
-        let x_sk = XSecretKey::random_from_rng(&mut ChaCha20Rng::from_seed(seed));
+        let mut rng = ChaCha20Rng::from_seed(seed);
+
+        let x_sk = XSecretKey::random_from_rng(&mut rng);
         let x_pk = XPublicKey::from(&x_sk);
-        let kb = pqc_kyber::keypair(&mut ChaCha20Rng::from_seed(seed)).expect("failed to generate kyber");
+        let kb = pqc_kyber::keypair(&mut rng).expect("failed to generate kyber");
         
         Self {
             sk: SecretKey::new(x_sk, kb.secret),
@@ -110,7 +112,7 @@ mod tests {
 
         let Kem { pk: alice1, .. } = Kem::from_seed(seed);
         let Kem { pk: alice2, .. } = Kem::from_seed(seed);
-        
+
         assert_eq!(&alice1.id(), &alice2.id(), "Equivalent bundles must match");
     }
 }

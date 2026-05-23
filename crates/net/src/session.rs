@@ -1,7 +1,6 @@
-use bytes::Bytes;
-use crypto::{blake3, ciphertext::{Ciphertext, Nonce}, kem::SharedSecret};
+use crypto::{blake3, ciphertext::{Nonce, Sealed}, kem::SharedSecret};
 
-use crate::{error::NetworkError, packet::WireMessage};
+use crate::{error::NetworkError, packet::{Frame, FrameData}};
 
 const WINDOW: usize = 32;
 const VERSION: u8 = 1;
@@ -52,23 +51,22 @@ impl Session {
         true
     }
 
-    pub fn send(&mut self, plaintext: &[u8]) -> Result<WireMessage, NetworkError> { // WireMessage
+    pub fn send(&mut self, data: &FrameData) -> Result<Frame, NetworkError> {
         self.seq += 1;
 
-        let ciphertext = Ciphertext::encrypt(&self.shared, plaintext, self.nonce(), &self.aad())?;
+        let sealed = Sealed::encrypt(&self.shared, data, self.nonce(), &self.aad())?;
 
-        Ok(WireMessage { seq: self.seq, ciphertext })
-        // Ok(WireMessage { seq: self.seq, ciphertext, session_id: self.session_id.clone() })
+        Ok(Frame { seq: self.seq, data: sealed })
     }
 
-    pub fn recv(&mut self, msg: WireMessage) -> Result<Bytes, NetworkError> {
-        if !self.check_seq(msg.seq) {
+    pub fn recv(&mut self, frame: Frame) -> Result<FrameData, NetworkError> {
+        if !self.check_seq(frame.seq) {
             return Err(NetworkError::InvalidSeq);
         }
 
-        let plaintext = msg.ciphertext.decrypt(self.shared, &self.aad())?;
+        let data = frame.data.decrypt(self.shared, &self.aad())?;
 
-        Ok(plaintext)
+        Ok(data)
     }
 
     fn nonce(&self) -> Nonce {

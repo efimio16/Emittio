@@ -1,73 +1,85 @@
 # <img src="assets/logo.png" alt="Emittio logo" style="height: 1em"/> Emittio
 
-*Anonymous, decentralized email. Powered by DHT & end-to-end encryption.*
+*Email, without identity. Simple to use, hard to trace.*
+
+> Private messaging without accounts, designed to be as seamless as traditional email.
 
 🌐 [Website](https://emittio.vercel.app/) | 📣 [Telegram](https://t.me/EmittioMail)
 
-## Why Emittio?
-
-> A next-gen email protocol designed for anonymity, resilience, and full user control.
+## 📫 Why Emittio?
 
 We're building a mail system that is:
 
-- 🕸️ **Decentralized** — no central servers, no single point of failure.
-- 🔐 **End-to-end encrypted** — only sender and recipient can read the content.
-- 👤 **Anonymous** — no IDs or accounts
-- ⚡️ **Efficient** — fast delivery
+- 🔒 **Private by design** — No accounts. End-to-end & post-quantum encrypted. The network cannot see senders or recipients.
+- 🕸️ **Decentralized** — owned by users, not by a single company.
+- ⚡️ **Seamless** — fast delivery and private synchronization between devices.
 
-## Getting started
+## 🧩 Core Components
 
-## Requirements
+| Component | Description |
+|-|-|
+| **Message** | Encrypted content with hidden sender and recipient metadata. |
+| **Pointer** | A scan-based locator that lets recipients discover messages without revealing recipient identities. |
+| **Event** | Private state records used for mailbox state, network optimization and and synchronization across devices. |
+| **Seed** | A single recovery key that derives all addresses, encryption keys, and identities across devices. Replaces traditional accounts. |
+| **Address** | A public identifier derived from the Seed that can receive messages without exposing the Seed itself. |
+| **Inbox** | A local mailbox that scans the network for messages addressed to a specific Address. |
+| **Client** | A user application that connects to the network. |
+| **Node** | A network participant that shares storage and availability with others while benefiting from improved performance and synchronization. |
+
+## 🏠 Architecture Overview
+
+### Sender
+
+1. An Address is derived from the sender's Seed.
+2. A unique message key is derived from the Address and used to encrypt the message.
+3. The encrypted message is published to the network with hidden sender and recipient metadata.
+4. A Pointer is created so only the recipient's Inbox can detect the message while scanning.
+5. An encrypted Event is published for synchronization across devices without exposing ownership or linkable activity.
+
+### Recipient
+
+1. The recipient's Inbox scans new Pointers for Addresses derived from the Seed.
+2. If a matching Pointer is detected, the Inbox records a new Event to avoid scanning it again and synchronize mailbox state.
+3. The encrypted message is loaded from the network and decrypted locally.
+
+## 🟢 Current Status
+
+The project is currently in early development of MVP.
+
+### Core
+
+- [x] Cryptography module
+- [ ] Network module
+- [ ] Node table
+- [ ] Multi-hop routing
+
+### Messaging
+
+- [ ] Message publishing and retrieval
+- [ ] Pointer discovery
+- [ ] Event synchronization
+
+### Mailbox
+
+- [ ] Inbox creation
+- [ ] Device synchronization
+
+### Applications
+
+- [ ] Node application
+- [ ] Web client
+
+
+## Quick Start
+
+### Requirements
 
 - Rust (stable) — https://rustup.rs
 
-## Build
-
 ```bash
-cd core
-cargo build --release
-```
-
-## Run
-
-```bash
-cd core
 cargo run --release
 ```
-
-## 🏠 Architecture
-
-In other words, how it works.
-
-| Component | Role |
-|-|-|
-| **Inbox** | A public key that acts as a mailbox identifier |
-| **Session** | A secret seed used to derive inbox keys (no accounts are stored on the network) |
-| **Envelope** | An encrypted message. Metadata (sender, recipient, time) is also encrypted. Each envelope includes a lookup pointer derived from a shared secret with the recipient. |
-| **DHT** | Allows to store and find encrypted mails in network |
-| **Mixnet** | Routes onion-like data through 3 hops (prevents IP correlation) and sends a lot of dummy requests (partially prevents timing correlation) |
-| **Nodes** | Save encrypted content and forward onion-like messages |
-
-### Optimization components
-
-| Component | Role |
-|-|-|
-| **Tags** | Small encrypted metadata used to optimize lookups |
-| **Quorums** | Temporary node groups that reduce network-wide scanning |
-
-## 🛣️ Roadmap
-
-1. [x] Alice-Bob cryptography system prototype in Rust
-2. [x] `Client`, `Node` and `MockTransport` abstractions
-3. [x] Tags, their storage and lookup
-4. [x] Application-level transport encryption
-5. [x] `PeerTable` service
-6. [x] DHT
-7. [ ] QUIC and/or TCP transports
-8. [ ] Mixnet (onion-like routing & dummy requests)
-9. [ ] Quorums
-10. [ ] UX & UI prototyping
-11. [ ] Svelte web client
 
 ## 🤝 Join the Project
 
@@ -87,19 +99,17 @@ Thanks to everyone who contributed to this project!
 
 - [@mikeyoung3k](https://github.com/mikeyoung3k)
 
-## 🟢 Status
-
-Currently working on the MVP; looking for feedback on architecture.
-
 ## 🛠️ Tech Stack
 
-- X25519 and Kyber512 for shared secret
-- Ed25519 and dilithium for signatures
-- ChaCha20Poly1305 for envelopes and AES-GCM for onion traffic and tags
-- BLAKE3 for hashes and SHA256 for PoW hashes
-- DHT on QUIC protocol
-- Rust (nodes)
-- Svelte + WASM (web client)
+### Cryptography
+- X25519 and Kyber512 for key encapsulation
+- Ed25519 and Dilithium for signatures
+- AES-GCM for encryption and decryption
+- BLAKE3 for hashes
+
+### Languages
+- Rust (nodes and core client)
+- Vanilla HTML/CSS/JavaScript (web client)
 
 ## ❤️ Support
 

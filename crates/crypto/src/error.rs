@@ -16,12 +16,6 @@ pub enum CryptoError {
 
     #[error(transparent)]
     Rand(#[from] rand::Error),
-}
-
-#[derive(Debug, Error)]
-pub enum SealedError {
-    #[error(transparent)]
-    Crypto(#[from] CryptoError),
 
     #[error(transparent)]
     Postcard(#[from] postcard::Error),

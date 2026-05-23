@@ -1,68 +1,131 @@
-use crypto::{error::CryptoError, id::Id};
-use tokio_util::sync::CancellationToken;
-use tokio::task::JoinError;
-use thiserror::Error;
-use crate::{/*net::session::ActiveSession, */error::NetError,message::IncomingMessage,payload::Payload,peer::Peer,/*utils::{SerdeError,ChannelError}, */transport::error::TransportError};
+use std::collections::{HashMap, HashSet};
+use crypto::kem::{Kem, SecretKey, SharedSecret};
+use tokio_util::task::JoinMap;
+use actor::{actor, Callback, Channel, ok_or_reply};
+use rand::{RngCore, rngs::OsRng};
 
-#[derive(Debug,Error)]
-pub enum NetServError {
-    #[error(transparent)]
-    Serde(#[from] SerdeError),
+use crate::{error::NetworkError, packet::{Handshake, Packet, PayloadId}, peer::{Peer, PeerId}, session::Session};
 
-    #[error(transparent)]
-    Channel(#[from] ChannelError),
+use crate::{packet::FrameData, payload::{Query, Reply}};
 
-    #[error(transparent)]
-    Crypto(#[from] CryptoError),
+const CHAN_SIZE: usize = 256;
 
-    #[error(transparent)]
-    Net(#[from] NetError),
+type ConnId = u64;
 
-    #[error(transparent)]
-    Join(#[from] JoinError),
+#[actor]
+mod network {
+    #[commands]
+    pub enum NetworkCmd {
+        #[callback(Reply, NetworkError)]
+        Query { peer: Peer, query: Query },
+    }
 
-    #[error(transparent)]
-    Transport(#[from] TransportError),
+    #[handle]
+    pub struct NetworkHandle;
 
-    #[error("client not found")]
-    ClientNotFound,
+    #[service]
+    pub struct NetworkService {
+        zero_rtt_resp_states: HashMap<PeerId, SharedSecret>,
+        one_rtt_init_states: HashMap<PeerId, SecretKey>,
+        one_rtt_resp_states: HashMap<PeerId, SharedSecret>,
 
-    #[error("sessions not found")]
-    SessionsNotFound,
+        zero_rtt_sessions: HashMap<PeerId, Session>,
+        one_rtt_sessions: HashMap<PeerId, Session>,
 
-    #[error("Session already exists")]
-    SessionAlreadyExists,
+        callbacks: HashMap<(PeerId, PayloadId), Callback<Reply, NetworkError>>,
+        ttl_sessions: HashMap<u64, PeerId>,
 
-    #[error("peer not found")]
-    PeerNotFound,
+        conns_by_peer: HashMap<PeerId, HashSet<ConnId>>,
+        peer_by_conn: HashMap<ConnId, PeerId>,
+        pending_conns: HashSet<ConnId>,
+        active_conns: HashMap<ConnId, Channel<Packet>>,
+        connections: JoinMap<ConnId, NetworkError>,
+        ttl_connections: HashMap<u64, ConnId>,
+    }
 
-}
+    #[service]
+    impl NetworkService {
+        // TODO: change OutgoingMessage to Payload
+        // TODO: change &Peer to PeerId when node manager will be implemented
 
+        #[command(Query)]
+        async fn query(&mut self, peer: Peer, query: Query, callback: Callback<Reply, NetworkError>) {
+            ok_or_reply!(NetworkError, callback, {
+                let session = self.select_session(&peer).await?;
 
+                let frame = session.send(&FrameData::Query(OsRng.next_u64(), query))?;
 
-pub trait NetService{
-    // Interface for handling connections out from a single peer/client
+                let conn = self.select_connection(&peer).await?;
+                conn.send(Packet::Frame(frame)).await?;
 
-    type Error: Into<NetServError>;
+                Ok(())
+            });
+        }
+    }
 
-    // Add fully formed sessions to the service
-    // Deal with handshakes prior to adding into service
-    // Fail on adding a session if the peer already exists
-    fn add_session(&mut self, client: (Peer,ActiveSession)) -> impl Future<Output = Result<(), Self::Error>> + Send;
-    // It is possible that you'd want multiple sessions between two peers. Currently this would be an error. 
-    // If not changed now, it will be hard to fix in the future.
+    impl NetworkService {
+        fn new() -> (Self, NetworkHandle) {
+            let (tx, rx) = Channel::new(CHAN_SIZE);
 
-    // Close a session and drop it from the table
-    fn drop_session(&mut self, peer: &Id) -> impl Future<Output = Result<(), Self::Error>> + Send;
+            (Self {
+                rx,
 
-    // Listen for incoming messages from all peers
-    fn listen(&mut self, token: CancellationToken) -> impl Future<Output = Result<IncomingMessage, Self::Error>> + Send;
+                zero_rtt_resp_states: HashMap::new(),
+                one_rtt_init_states: HashMap::new(),
+                one_rtt_resp_states: HashMap::new(),
 
-    // Broadcast messages to all sessions
-    // Responsible for encrypting for each peer
-    fn broadcast(&mut self, msg: Payload, token: CancellationToken) -> impl Future<Output = Result<(), Self::Error>> + Send;
+                zero_rtt_sessions: HashMap::new(),
+                one_rtt_sessions: HashMap::new(),
+                callbacks: HashMap::new(),
+                ttl_sessions: HashMap::new(),
 
-    // Transmit messages to a specific session
-    // OutgoingMessage has its own PeerID
-    fn transmit(&mut self, msg: Payload,target: Id, token: CancellationToken) -> impl Future<Output = Result<(), Self::Error>> + Send;
+                conns_by_peer: HashMap::new(),
+                peer_by_conn: HashMap::new(),
+                pending_conns: HashSet::new(),
+                active_conns: HashMap::new(),
+                connections: JoinMap::new(),
+                ttl_connections: HashMap::new(),
+            }, NetworkHandle { tx })
+        }
+
+        // TODO: change &Peer to PeerId when node manager will be implemented
+        async fn select_session(&mut self, peer: &Peer) -> Result<&mut Session, NetworkError> {
+            let session = if self.one_rtt_sessions.contains_key(&peer.id) {
+                self.one_rtt_sessions.get_mut(&peer.id).unwrap()
+            } else if let Some(state) = self.one_rtt_resp_states.remove(&peer.id) {
+                let session = Session::new(state, false);
+
+                self.one_rtt_sessions.insert(peer.id.clone(), session);
+                self.one_rtt_sessions.get_mut(&peer.id).unwrap()
+            } else if self.zero_rtt_sessions.contains_key(&peer.id) {
+                self.zero_rtt_sessions.get_mut(&peer.id).unwrap()
+            } else {
+                let keypair = Kem::random();
+
+                let (capsule, shared) = keypair.sk.shared(&peer.pk)?;
+
+                self.one_rtt_init_states.insert(peer.id.clone(), keypair.sk);
+
+                let handshake = Handshake {
+                    pk: keypair.pk,
+                    capsule,
+                };
+
+                let conn = self.select_connection(peer).await?;
+                conn.send(Packet::Handshake(handshake)).await?;
+
+                let session = Session::new(shared, true);
+
+                self.zero_rtt_sessions.insert(peer.id.clone(), session);
+                self.zero_rtt_sessions.get_mut(&peer.id).unwrap()
+            };
+
+            Ok(session)
+        }
+
+        // TODO: change &Peer to PeerId when node manager will be implemented
+        async fn select_connection(&mut self, _peer: &Peer) -> Result<Channel<Packet>, NetworkError> {
+            todo!("Get or init connection")
+        }
+    }
 }

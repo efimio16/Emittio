@@ -1,5 +1,5 @@
 use crypto::kem::PublicKey;
-use net::manager::NetworkHandle;
+use net::service::NetworkHandle;
 
 use crate::types::PointerBody;
 

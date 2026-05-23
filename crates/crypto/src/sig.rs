@@ -18,9 +18,11 @@ pub struct Sig;
 
 impl Sig {
     pub fn from_seed(seed: [u8; 32]) -> (SecretKey, PublicKey) {
-        let ed_sk = EdSigningKey::generate(&mut ChaCha20Rng::from_seed(seed));
+        let mut rng = ChaCha20Rng::from_seed(seed);
+
+        let ed_sk = EdSigningKey::generate(&mut rng);
         let ed_pk = ed_sk.verifying_key();
-        let dl = DilithiumKeypair::generate(&mut ChaCha20Rng::from_seed(seed)).expect("failed to generate dilithium");
+        let dl = DilithiumKeypair::generate(&mut rng).expect("failed to generate dilithium");
         
         (SecretKey::new(ed_sk, dl.secret), PublicKey::new(ed_pk, dl.public))
     }

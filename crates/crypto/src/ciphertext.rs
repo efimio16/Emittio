@@ -1,6 +1,7 @@
 use aes_gcm::{AeadInPlace, Aes256Gcm, KeyInit};
 use bytes::{Bytes, BytesMut};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use std::marker::PhantomData;
 
 use crate::{error::CryptoError, kem::SharedSecret};
 
@@ -33,5 +34,27 @@ impl Ciphertext {
         cipher.decrypt_in_place_detached(&self.nonce.into(), aad, &mut buf, &self.tag.into())?;
 
         Ok(buf.freeze())
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
+pub struct Sealed<T> {
+    ciphertext: Ciphertext,
+    _marker: PhantomData<T>,
+}
+
+impl<T: DeserializeOwned + Serialize> Sealed<T> {
+    #[inline]
+    pub fn encrypt(shared: &SharedSecret, data: &T, nonce: Nonce, aad: &[u8]) -> Result<Self, CryptoError> {
+        Ok(Self {
+            ciphertext: Ciphertext::encrypt(shared, &postcard::to_stdvec(data)?, nonce, aad)?,
+            _marker: PhantomData,
+        })
+    }
+
+    #[inline]
+    pub fn decrypt(self, shared: SharedSecret, aad: &[u8]) -> Result<T, CryptoError> {
+        let bytes = self.ciphertext.decrypt(shared, aad)?;
+        Ok(postcard::from_bytes(&bytes)?)
     }
 }

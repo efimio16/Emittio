@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{Arm, Attribute, Expr, Fields, Ident, ImplItem, Item, ItemEnum, ItemFn, ItemImpl, ItemMod, ItemStruct, Type, Variant, parse_macro_input, parse_quote};
+use syn::{Attribute, Expr, Fields, Ident, ImplItem, Item, ItemEnum, ItemFn, ItemImpl, ItemMod, ItemStruct, Token, Type, Variant, parse::ParseStream, parse_macro_input, parse_quote};
 
 // const ACTOR_ATTR: &'static str = "actor";
 const COMMANDS_ATTR: &'static str = "commands";
@@ -9,15 +9,15 @@ const HANDLE_ATTR: &'static str = "handle";
 const SERVICE_ATTR: &'static str = "service";
 const COMMAND_ATTR: &'static str = "command";
 const LISTEN_ATTR: &'static str = "listen";
-const EVERY_ATTR: &'static str = "every";
-const REPLY_ATTR: &'static str = "reply";
+// const EVERY_ATTR: &'static str = "every";
+const CALLBACK_ATTR: &'static str = "callback";
 
 #[derive(Clone)]
 struct Command {
     name: Ident,
     field_names: Vec<Ident>,
     field_types: Vec<Type>,
-    reply: Type,
+    reply: (Type, Type),
 }
 
 impl Command {
@@ -26,9 +26,15 @@ impl Command {
             panic!("Command enum should contain only variants with named fields")
         };
 
-        let reply = find_and_remove_attr(&mut item.attrs, REPLY_ATTR)
+        let (ok, _, err): (Type, Token![,], Type) = find_and_remove_attr(&mut item.attrs, CALLBACK_ATTR)
             .expect("Each command should have a reply type")
-            .parse_args()
+            .parse_args_with(|input: ParseStream| {
+                Ok((
+                    input.parse::<Type>()?,
+                    input.parse::<Token![,]>()?,
+                    input.parse::<Type>()?,
+                ))
+            })
             .expect("Failed to parse reply type");
 
         let mut field_names = vec![];
@@ -39,13 +45,13 @@ impl Command {
             field_types.push(field.ty.clone());
         }
         
-        fields.named.push(parse_quote! { reply_tx: ::actor::oneshot::Sender<#reply> });
+        fields.named.push(parse_quote! { reply_tx: ::actor::Callback<#ok, #err> });
 
         Self {
             name: item.ident.clone(),
             field_names,
             field_types,
-            reply,
+            reply: (ok, err),
         }
     }
 }
@@ -77,7 +83,7 @@ impl Handle {
         };
 
         let cmd_name = &commands.name;
-        item.fields = Fields::Named(parse_quote! { { tx: ::actor::mpsc::Sender<#cmd_name> } });
+        item.fields = Fields::Named(parse_quote! { { tx: ::actor::Channel<#cmd_name> } });
 
         Self {
             name: item.ident.clone(),
@@ -90,16 +96,15 @@ impl Handle {
         let cmd_name = &self.commands.name;
 
         let methods = self.commands.list.iter().map(|c| -> ItemFn {
-            let Command { name, field_names, field_types, reply } = c;
+            let Command { name, field_names, field_types, reply: (ok, err) } = c;
 
             let method_name = format_ident!("{}", name.to_string().to_lowercase());
 
             parse_quote! {
-                pub async fn #method_name(&self, #(#field_names: #field_types),*) -> Result<#reply, ::actor::channel::ChannelError> {
-                    let (tx, rx) = ::actor::channel::create_oneshot();
+                pub async fn #method_name(&self, #(#field_names: #field_types),*) -> Result<Result<#ok, #err>, ::actor::ChannelError> {
+                    let (tx, rx) = ::actor::Callback::new();
 
-                    ::actor::channel::send(
-                        &self.tx,
+                    self.tx.send(
                         #cmd_name::#name {
                             #( #field_names, )*
                             reply_tx: tx,
@@ -117,11 +122,6 @@ impl Handle {
             }
         }
     }
-}
-
-struct CommandMethod {
-    name: Ident,
-    cmd: Ident,
 }
 
 struct ListenMethod {
@@ -199,7 +199,7 @@ impl Service {
 
         parse_quote! {
             impl ::actor::Service for #handler_name {
-                async fn run(mut self, token: ::actor::CancellationToken) -> Result<(), ::actor::channel::ChannelError> {
+                async fn run(mut self, token: ::actor::CancellationToken) -> Result<(), ::actor::ChannelError> {
                     loop {
                         ::actor::select! {
                             _ = token.cancelled() => { return Ok(()); },
@@ -219,7 +219,7 @@ impl Service {
 }
 
 #[proc_macro_attribute]
-pub fn actor(args: TokenStream, item: TokenStream) -> TokenStream {
+pub fn actor(_args: TokenStream, item: TokenStream) -> TokenStream {
     let mut module = parse_macro_input!(item as ItemMod);
 
     let Some((_, items)) = &mut module.content else {

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::payload::{Query, Reply};
+use super::{Query, Reply};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum TestQuery {
@@ -13,8 +13,8 @@ pub enum TestReply {
 }
 
 impl From<TestQuery> for Query {
-    fn from(value: TestQuery) -> Self { Self::Mock(value) }
+    fn from(value: TestQuery) -> Self { Self::Test(value) }
 }
 impl From<TestReply> for Reply {
-    fn from(value: TestReply) -> Self { Self::Mock(value) }
+    fn from(value: TestReply) -> Self { Self::Test(value) }
 }

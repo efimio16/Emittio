@@ -1,8 +1,9 @@
-pub mod channel;
-
 pub use tokio_util::sync::CancellationToken;
 pub use tokio::{sync::{mpsc, oneshot}, select};
 pub use actor_macro::actor;
+
+use futures::{TryFutureExt, future::MapErr};
+use thiserror::Error;
 
 // I don't think we'll need a dynamic orchestration of services,
 // so let's try without this enum but keeping it just in case
@@ -75,5 +76,83 @@ pub use actor_macro::actor;
 // }
 
 pub trait Service {
-    fn run(self, token: CancellationToken) -> impl Future<Output = Result<(), channel::ChannelError>> + Send;
+    fn run(self, token: CancellationToken) -> impl Future<Output = Result<(), ChannelError>> + Send;
+}
+
+#[derive(Debug, Error)]
+pub enum ChannelError {
+    #[error("Channel closed unexpectedly")]
+    Closed,
+}
+
+pub struct Callback<T, E>(oneshot::Sender<Result<T, E>>);
+
+impl<T, E> Callback<T, E> {
+    #[inline]
+    pub fn new() -> (Self, MapErr<oneshot::Receiver<Result<T, E>>, impl FnOnce(oneshot::error::RecvError) -> ChannelError>) {
+        let (tx, rx) = oneshot::channel();
+        (Self(tx), rx.map_err(|_| ChannelError::Closed))
+    }
+
+    #[inline]
+    pub fn ok(self, data: T) -> Result<(), ChannelError> {
+        self.0.send(Ok(data)).map_err(|_| ChannelError::Closed)
+    }
+
+    #[inline]
+    pub fn err(self, err: E) -> Result<(), ChannelError> {
+        self.0.send(Err(err)).map_err(|_| ChannelError::Closed)
+    }
+}
+
+pub struct Channel<T>(mpsc::Sender<T>);
+
+impl<T> Channel<T> {
+    #[inline]
+    pub fn new(size: usize) -> (Self, mpsc::Receiver<T>) {
+        let (tx, rx) = mpsc::channel(size);
+
+        (Self(tx), rx)
+    }
+
+    #[inline]
+    pub async fn send(&self, data: T) -> Result<(), ChannelError> {
+        self.0.send(data).await.map_err(|_| ChannelError::Closed)
+    }
+}
+
+pub struct ResultChannel<T, E>(mpsc::Sender<Result<T, E>>);
+
+impl<T, E> ResultChannel<T, E> {
+    #[inline]
+    pub fn new(size: usize) -> (Self, mpsc::Receiver<Result<T, E>>) {
+        let (tx, rx) = mpsc::channel(size);
+
+        (Self(tx), rx)
+    }
+
+    #[inline]
+    pub async fn ok(&self, data: T) -> Result<(), ChannelError> {
+        self.0.send(Ok(data)).await.map_err(|_| ChannelError::Closed)
+    }
+
+    #[inline]
+    pub async fn err(&self, err: E) -> Result<(), ChannelError> {
+        self.0.send(Err(err)).await.map_err(|_| ChannelError::Closed)
+    }
+}
+
+#[macro_export]
+macro_rules! ok_or_reply {
+    ($err:ty, $cb:expr, $block:block) => {
+        let mut inner = async || -> Result<(), $err> { $block };
+
+        match inner().await {
+            Ok(success) => success,
+            Err(err) => {
+                $cb.err(err).ok();
+                return;
+            }
+        }
+    };
 }
