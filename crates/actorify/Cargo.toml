@@ -1,0 +1,11 @@
+[package]
+name = "actorify"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+actorify-macro = { version = "0.1.0", path = "../actorify-macro" }
+futures = "0.3.32"
+thiserror = "2.0.18"
+tokio = { version = "1.52.3", features = ["sync"] }
+tokio-util = "0.7.18"

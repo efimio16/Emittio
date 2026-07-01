@@ -1,0 +1,12 @@
+[package]
+name = "emittio-client"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+actorify = { version = "0.1.0", path = "../actorify" }
+emittio-crypto = { version = "0.1.0", path = "../emittio-crypto" }
+emittio-inbox = { version = "0.1.0", path = "../emittio-inbox" }
+emittio-network = { version = "0.1.0", path = "../emittio-network" }
+thiserror = "2.0.18"
+tokio = "1.52.3"

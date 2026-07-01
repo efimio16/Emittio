@@ -1,0 +1,15 @@
+[package]
+name = "emittio-client-cli"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.102"
+clap = { version = "4.6.1", features = ["derive"] }
+emittio-client = { version = "0.1.0", path = "../../crates/emittio-client" }
+emittio-crypto = { version = "0.1.0", path = "../../crates/emittio-crypto" }
+directories = "6.0.0"
+edit = "0.1.5"
+emittio-inbox = { version = "0.1.0", path = "../../crates/emittio-inbox" }
+postcard = "1.1.3"
+tokio = { version = "1.52.3", features = ["fs"] }

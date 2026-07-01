@@ -1,0 +1,7 @@
+[package]
+name = "emittio-message"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+emittio-crypto = { version = "0.1.0", path = "../emittio-crypto" }

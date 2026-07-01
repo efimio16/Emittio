@@ -1,0 +1,10 @@
+[package]
+name = "emittio-inbox"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+actorify = { version = "0.1.0", path = "../actorify" }
+emittio-crypto = { version = "0.1.0", path = "../emittio-crypto" }
+emittio-network = { version = "0.1.0", path = "../emittio-network" }
+serde = "1.0.228"

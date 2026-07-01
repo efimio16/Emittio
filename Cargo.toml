@@ -1,7 +1,7 @@
 [workspace.package]
 name = "Emittio"
 version = "0.1.0"
-description = "Decentralized anonymous mail"
+description = "Private by design, decentralized and seamless mail."
 authors = ["efimio16"]
 license = "GPL-3.0"
 repository = "https://github.com/efimio16/Emittio"
@@ -11,13 +11,18 @@ readme = "README.md"
 [workspace]
 resolver = "3"
 members = [
-    # "crates/client",
-    "crates/crypto", "crates/event",
-    "crates/message",
+    "crates/emittio-client",
+    "crates/emittio-crypto",
+    "crates/emittio-event",
+    "crates/emittio-message",
     # "crates/dht",
-    "crates/net", "crates/pointer",
+    "crates/emittio-network",
+    "crates/emittio-pointer",
     # "crates/node",
     # "crates/peer",
-    "crates/actor",
-    "crates/actor-macro"
+    "crates/actorify",
+    "crates/actorify-macro",
+    "crates/emittio-inbox",
+    "apps/emittio-client-cli",
+    "crates/emittio-dht",
 ]
