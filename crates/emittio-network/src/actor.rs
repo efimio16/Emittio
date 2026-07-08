@@ -6,13 +6,11 @@ use tokio_util::task::JoinMap;
 use actorify::{Callback, Channel, actor, ok_or_reply};
 use rand::{RngCore, rngs::OsRng};
 
-use crate::{error::NetworkError, types::{Handshake, Packet, PayloadId}, peer::{Peer, PeerId}, session::Session};
+use crate::{error::NetworkError, types::{Handshake, Packet, PayloadId,ConnId}, peer::{Peer, PeerId}, session::Session};
 
 use crate::types::FrameData;
 
 const CHAN_SIZE: usize = 256;
-
-type ConnId = u64;
 
 pub struct NetworkActor {
     zero_rtt_resp_states: HashMap<PeerId, SharedSecret>,

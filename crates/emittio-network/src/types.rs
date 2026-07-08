@@ -3,6 +3,8 @@ use emittio_crypto::{ciphertext::Sealed, id::Id, kem::{Capsule, PublicKey}};
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
+pub type ConnId = u64;
+
 #[derive(Serialize, Deserialize)]
 pub struct Handshake {
     pub pk: PublicKey,
