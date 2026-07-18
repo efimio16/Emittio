@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use emittio_crypto::id::Id;
-use emittio_network::types::{PeersSelection, PowConfig, IntoQuery, RouteConfig, VerificationMethod};
+use emittio_network::types::{PeerSelection, PowConfig, IntoQuery, RouteConfig, VerificationMethod};
 use serde::{Deserialize, Serialize};
 
 use crate::{DHT_SERVICE_ID, error::{DhtGetError, DhtPutError}};
@@ -18,7 +18,7 @@ impl IntoQuery for DhtGet {
     type Reply = Result<Bytes, DhtGetError>;
 
     fn route_config(&self) -> RouteConfig {
-        RouteConfig { peers: PeersSelection::Closest { target: self.cid.clone(), count: REPLICATION }, pow: PowConfig::High }
+        RouteConfig { peers: PeerSelection::Closest { target: self.cid.clone(), count: REPLICATION }, pow: PowConfig::High }
     }
     fn verification_method(&self) -> VerificationMethod {
         VerificationMethod::Hash(self.cid.clone())
@@ -36,6 +36,6 @@ impl IntoQuery for DhtPut {
     type Reply = Result<(), DhtPutError>;
 
     fn route_config(&self) -> RouteConfig {
-        RouteConfig { peers: PeersSelection::Closest { target: Id::hash_bytes(&self.bytes), count: REPLICATION }, pow: PowConfig::High }
+        RouteConfig { peers: PeerSelection::Closest { target: Id::hash_bytes(&self.bytes), count: REPLICATION }, pow: PowConfig::High }
     }
 }

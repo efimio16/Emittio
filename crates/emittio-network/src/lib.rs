@@ -4,3 +4,6 @@ pub mod types;
 pub mod peer;
 pub mod actor;
 pub mod transport;
+pub mod query;
+pub mod reply;
+pub mod verifier;
