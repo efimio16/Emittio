@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::CryptoError;
 
-#[derive(PartialEq, Eq, Clone, Debug, Deserialize, Serialize, Hash)]
+#[derive(PartialEq, Eq, Clone, Debug, Deserialize, Serialize, Hash, Copy, Default)]
 pub struct Id(pub [u8; 32]);
 
 impl Id {

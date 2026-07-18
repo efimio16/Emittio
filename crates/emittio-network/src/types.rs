@@ -3,6 +3,8 @@ use emittio_crypto::{ciphertext::Sealed, id::Id, kem::{Capsule, PublicKey}};
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
+use crate::query::Query;
+
 #[derive(Serialize, Deserialize)]
 pub struct Handshake {
     pub pk: PublicKey,
@@ -14,7 +16,7 @@ pub type PayloadId = u64;
 
 #[derive(Serialize, Deserialize)]
 pub enum FrameData {
-    Query(Bytes),
+    Query(Query),
     Reply(Bytes),
     Chunk(Bytes),
 }
@@ -32,11 +34,12 @@ pub enum Packet {
 }
 
 pub struct RouteConfig {
-    pub peers: PeersSelection,
+    pub peers: PeerSelection,
     pub pow: PowConfig,
 }
 
-pub enum PeersSelection {
+#[derive(Clone)]
+pub enum PeerSelection {
     Closest {
         target: Id,
         count: u16,
@@ -71,14 +74,6 @@ pub trait IntoQuery {
     fn verification_method(&self) -> VerificationMethod {
         VerificationMethod::None
     }
-}
-
-pub struct Query {
-    service_id: u16,
-    method_id: u16,
-    bytes: Bytes,
-    route_config: RouteConfig,
-    verification_method: VerificationMethod,    
 }
 
 pub trait NetworkHandler<Q: IntoQuery> {

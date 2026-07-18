@@ -1,7 +1,7 @@
 use convert_case::{Case, Casing};
 use proc_macro::TokenStream;
 use quote::{ToTokens, format_ident, quote};
-use syn::{Attribute, FnArg, ImplItem, ItemImpl, Pat, parse_macro_input, parse_quote};
+use syn::{Attribute, FnArg, ImplItem, ItemImpl, Meta, Pat, parse_macro_input, parse_quote};
 
 #[proc_macro_attribute]
 pub fn actor(_args: TokenStream, item: TokenStream) -> TokenStream {
@@ -61,11 +61,14 @@ pub fn actor(_args: TokenStream, item: TokenStream) -> TokenStream {
                         }
                     }
 
+                    let other_attrs = &impl_item_fn.attrs;
+
                     let handle_cb_name = handle_cb_name.expect("Callback not found");
                     let reply_ty = reply_ty.expect("Callback not found");
 
                     cmd_variants.push(quote! { #cmd_var_ident(#(#cmd_arg_types),*) });
                     handle_methods.push(quote! {
+                        #(#other_attrs)*
                         pub async fn #fn_name(&self, #(#handle_args),*) -> Result<#reply_ty, ::actorify::ChannelError> {
                             let (#handle_cb_name, rx) = ::actorify::Callback::new();
 
@@ -119,12 +122,6 @@ pub fn actor(_args: TokenStream, item: TokenStream) -> TokenStream {
             #(#handle_methods)*
         }
 
-        // impl ::actorify::ActorHandle<#cmd_ident> for #handle_ident {
-        //     fn new(tx: ::actorify::Channel<#cmd_ident>) -> Self {
-        //         Self(tx)
-        //     }
-        // }
-
         #item
 
         impl ::actorify::Actor for #actor_ty {
@@ -166,4 +163,28 @@ fn find_and_remove_attr(
         .position(|a| a.path().is_ident(name))?;
 
     Some(attrs.remove(index))
+}
+
+fn extract_docs(attrs: &[Attribute]) -> String {
+    attrs
+        .iter()
+        .filter_map(|attr| {
+            if attr.path().is_ident("doc") {
+                match &attr.meta {
+                    Meta::NameValue(nv) => {
+                        if let syn::Expr::Lit(expr) = &nv.value {
+                            if let syn::Lit::Str(s) = &expr.lit {
+                                return Some(s.value());
+                            }
+                        }
+                        None
+                    }
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }

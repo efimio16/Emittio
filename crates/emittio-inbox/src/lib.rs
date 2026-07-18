@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use actorify::{actor, tokio::io::AsyncRead};
 use emittio_crypto::{id::Id, kem::{Kem, PublicKey}, tag::{TagAddress, TagVerifier}};
-use emittio_network::{actor::NetworkActorHandle, types::Query};
+use emittio_network::{actor::NetworkActorHandle, query::Query};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Deserialize, Serialize)]
